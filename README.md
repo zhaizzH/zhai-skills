@@ -7,14 +7,16 @@
 ```
 zhai-skills/
 ├── README.md                      # 本文件：集合首页
+├── LICENSE                        # MIT 许可证
 └── skills/
-    ├── aivedio-cover/             # 图像生成 / 编辑 skill（GPT Image 2）
-    └── aivedio-video/             # AI 新闻周报「网页视频」生成 skill
+    └── aivedio/                   # AiVedio 系列 skill 集合
+        ├── aivedio-cover/         # 图像生成 / 编辑 skill（GPT Image 2）
+        └── aivedio-video/         # AI 新闻周报「网页视频」生成 skill
 ```
 
 ## Skills 一览
 
-### [aivedio-cover](./skills/aivedio-cover/README.md)
+### [aivedio-cover](./skills/aivedio/aivedio-cover/README.md)
 
 面向 GPT Image 2 及任意 OpenAI 兼容图像接口的结构化提示词工程 + 图像生成包。一份 SKILL 定义自动适配三种运行模式，对用户无感：
 
@@ -26,9 +28,9 @@ zhai-skills/
 
 内置 **18 大类、79 个结构化 prompt 模板**，覆盖海报、UI 样机、产品图、信息图、学术图、技术架构图、漫画、头像、编辑工作流等；并自动归档渲染 prompt 与生成图片（`<task-slug>-<timestamp>` 命名）。
 
-- 文档：[中文](./skills/aivedio-cover/README.zh-CN.md) · [English](./skills/aivedio-cover/README.md)
+- 文档：[中文](./skills/aivedio/aivedio-cover/README.zh-CN.md) · [English](./skills/aivedio/aivedio-cover/README.md)
 
-### [aivedio-video](./skills/aivedio-video/README.md)
+### [aivedio-video](./skills/aivedio/aivedio-video/README.md)
 
 把每周 AI 新闻周报素材做成 **16:9「网页视频」**（点击驱动、可录屏成片），并配套句子级时间轴字幕生成工具。脚手架全套（`scaffold.sh` + `templates/` + `swiss-ikb` 主题 + `edge-tts` adapter）已 **vendored 进本 skill**，自包含、开箱即用。
 
@@ -36,7 +38,7 @@ zhai-skills/
 - Vite + React + TypeScript 生成 16:9 网页视频，每点击推进一个口播节拍
 - **edge-tts** 中文口播（免费零配置），音频播完自动进片
 - **句子级时间轴字幕**（srt / vtt / lrc 三份同步），剪映 / CapCut 可直接导入
-- 封面 / 配图由**兄弟 skill** [aivedio-cover](./skills/aivedio-cover/README.zh-CN.md) 提供，风格锁 `references/weekly-cover-design.md`（3:4）
+- 封面 / 配图由**兄弟 skill** [aivedio-cover](./skills/aivedio/aivedio-cover/README.zh-CN.md) 提供，风格锁 `references/weekly-cover-design.md`（3:4）
 - 固定 swiss-ikb 主题（瑞士国际主义 · 克莱因蓝 `#002FA7`），`tsc / build / vite` 验证闭环
 
 ## 安装与使用
@@ -45,8 +47,8 @@ zhai-skills/
 
 ```bash
 # 以 aivedio-video 为例（需要它的兄弟 skill aivedio-cover 时一并复制）
-cp -r skills/aivedio-video  <目标项目>/.claude/skills/
-cp -r skills/aivedio-cover  <目标项目>/.claude/skills/
+cp -r skills/aivedio/aivedio-video  <目标项目>/.claude/skills/
+cp -r skills/aivedio/aivedio-cover  <目标项目>/.claude/skills/
 ```
 
 > 两个 skill 在各自 README 的示例命令里用 `<skill>` / `<g>` 指代部署位置（相对项目根 `.claude/skills/<name>`），复制后按需替换路径。
