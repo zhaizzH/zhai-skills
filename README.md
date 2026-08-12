@@ -9,9 +9,11 @@ zhai-skills/
 ├── README.md                      # 本文件：集合首页
 ├── LICENSE                        # MIT 许可证
 └── skills/
-    └── aivedio/                   # AiVedio 系列 skill 集合
-        ├── aivedio-cover/         # 图像生成 / 编辑 skill（GPT Image 2）
-        └── aivedio-video/         # AI 新闻周报「网页视频」生成 skill
+    ├── aivedio/                   # AiVedio 系列 skill 集合
+    │   ├── aivedio-cover/         # 图像生成 / 编辑 skill（GPT Image 2）
+    │   └── aivedio-video/         # AI 新闻周报「网页视频」生成 skill
+    └── testing/
+        └── project-test-pipeline/ # 端到端测试闭环 skill（测试计划/执行/报告）
 ```
 
 ## Skills 一览
@@ -40,6 +42,16 @@ zhai-skills/
 - **句子级时间轴字幕**（srt / vtt / lrc 三份同步），剪映 / CapCut 可直接导入
 - 封面 / 配图由**兄弟 skill** [aivedio-cover](./skills/aivedio/aivedio-cover/README.zh-CN.md) 提供，风格锁 `references/weekly-cover-design.md`（3:4）
 - 固定 swiss-ikb 主题（瑞士国际主义 · 克莱因蓝 `#002FA7`），`tsc / build / vite` 验证闭环
+
+### [project-test-pipeline](./skills/testing/project-test-pipeline/README.md)
+
+**端到端测试闭环**：GitHub 拉取 → 构建运行 → 测试计划 → 执行 → 测试报告 → 缺陷交接 → 提交（8 步流程，Hermes 主会话协调）。
+
+- **范围边界**：只负责测试（发现问题 + 证据链报告），不含代码修改/修复——缺陷交接用户处理，验证在下一轮测试
+- 铁律「禁止猜测」：一切结论必须有证据链，无法验证标「未确认」
+- 分层测试：Smoke Gate → L0 单元 → L2 前端构建 → L1 Agent 能力（LLM 四方核对）→ L3 接口契约 → L4 E2E 视觉
+- 数据完整性断言（图片 naturalWidth / 统计=DB 全量 / 导出行数=total）；高风险路径（full 导入）超时保护纳入测试
+- 自带 AnimeTracker 项目实例（`references/at-project.md`）、计划/报告模板、环境指纹采集与多视口截图脚本
 
 ## 安装与使用
 
