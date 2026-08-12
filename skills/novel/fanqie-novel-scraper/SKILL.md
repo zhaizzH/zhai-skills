@@ -5,6 +5,8 @@ description: 番茄小说扫榜 → 挑标杆 → 拆解前3章 → 生成新书
 
 # 番茄扫榜 · 新书设定生成器
 
+> **来源**：本技能为结构参照 [qimao-novel-scraper](https://github.com/Yunshiro/yunn-skills)（Yunshiro/yunn-skills，MIT License）的同构改造版，番茄 URL 结构/选择器/字体混淆反爬方案均为本仓库 2026-08-12 实测自建，非原仓库内容。
+
 把「扫榜 → 挑标杆 → 拆前3章 → 出新书设定」全流程做成标准作业程序。产出的不是榜单搬运，而是**可落地的写作选题方案**。
 
 ## 一、目的与边界（重要）

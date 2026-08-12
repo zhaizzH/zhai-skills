@@ -5,6 +5,8 @@ description: 七猫小说扫榜 → 挑标杆 → 拆解前3章 → 生成新书
 
 # 七猫扫榜 · 新书设定生成器
 
+> **来源**：本技能 fork 自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（`qimao-novel-scraper`，MIT License），本仓库为增强版（新增 Step 0 需求采集、落盘约定细化、踩坑补录）。
+
 把「扫榜 → 挑标杆 → 拆前3章 → 出新书设定」全流程做成标准作业程序。产出的不是榜单搬运，而是**可落地的写作选题方案**。
 
 ## 一、目的与边界（重要）

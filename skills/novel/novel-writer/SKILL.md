@@ -5,6 +5,8 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 
 # 小说创作工坊
 
+> **来源**：本技能 fork 自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（`novel-writer`，MIT License），本仓库为增强版（check_novel.py 支持 --exclude-words/感知词表修正，references 增补长批量实测经验）。
+
 将小说创作拆成可确认、可恢复、可验证的六个阶段。不要一次性跳过规划直接生成全稿，除非用户明确要求跳过确认。
 
 ## 核心优先级
