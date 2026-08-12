@@ -257,3 +257,22 @@ Mode B / C 没有 CLI 入口——Skill 只负责把最终 prompt 渲染好，�
 ## 许可证
 
 MIT
+
+---
+
+## 触发词
+
+「做封面」「出缩略图」「生成视频封面」「加张配图」「图像生成」「出一张图」「画个图」「生成海报」「头像」「IP 周边」「论文配图」——任何出图/改图需求优先走本技能。
+
+## 快速上手
+
+1. 先运行 `scripts/check-mode.js` 确定当前运行模式（A 本地出图 / B 宿主图像工具 / C 纯 prompt 顾问）
+2. 按模板库渲染结构化 prompt（18 大类 79 模板）
+3. 出图/编辑，产物自动归档 `garden-aivedio-cover/`（`<task-slug>-<timestamp>` 命名）
+4. 是 aivedio-video 的封面/配图能力提供方（套 weekly-cover-design.md，swiss-ikb 克莱因蓝，3:4）
+
+## 来源与修改记录
+
+- **原创技能**：AiVedio 项目沉淀（非 fork）
+- **灵感参考**：模板案例库源自 [ConardLi/gpt-image-2-101](https://github.com/ConardLi/gpt-image-2-101) 公开案例（详见 README 案例库章节）
+

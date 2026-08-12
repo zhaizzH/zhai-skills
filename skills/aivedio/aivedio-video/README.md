@@ -146,3 +146,23 @@ node <g>/scripts/generate.js \
 ## 素材目录约定
 
 原始周报素材统一存 `.webfetch/`（正文约定），由抓取工具（firecrawl / WebFetch / curl）生成。
+
+---
+
+## 触发词
+
+「做这周的 AI 新闻视频」「新一期 weekly 周报」「周报网页视频」「把周报素材做成网页视频」「按老规矩做」「加字幕」「生成字幕」「出 srt/vtt/lrc」「口播稿改了重出字幕」「做封面」「出缩略图」（封面走兄弟技能 aivedio-cover）。
+
+## 快速上手
+
+1. 素材（`.webfetch/*.md` / 51ai / 36kr 周报 / 资讯链接）→ 结构化 `article.md`
+2. 产出口播稿 `script.md` + 7 章 `outline.md`（每章信息池必带来源标注）
+3. `scaffold.sh` 生成 Vite + React + TS 16:9 网页视频（每点击推进一个口播节拍）
+4. edge-tts 中文口播（免费零配置）+ 句子级字幕（srt/vtt/lrc 三份，剪映可直接导入）
+5. `tsc / build / vite` 验证闭环；封面配图由兄弟技能 aivedio-cover 提供
+
+## 来源与修改记录
+
+- **原创技能**：AiVedio 项目周报视频流程沉淀（非 fork）
+- **参考基础**：通用网页视频流程参考 base skill `web-video-presentation`——脚手架已 vendored 进本技能，无需另行安装
+

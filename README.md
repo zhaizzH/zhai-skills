@@ -12,6 +12,10 @@ zhai-skills/
     ├── aivedio/                   # AiVedio 系列 skill 集合
     │   ├── aivedio-cover/         # 图像生成 / 编辑 skill（GPT Image 2）
     │   └── aivedio-video/         # AI 新闻周报「网页视频」生成 skill
+        ├── novel/                     # 网文创作系列 skill 集合
+    │   ├── qimao-novel-scraper/  # 七猫扫榜 → 挑标杆 → 拆前3章 → 新书设定
+    │   ├── fanqie-novel-scraper/ # 番茄扫榜（同构于七猫版，含字体混淆反爬方案）
+    │   └── novel-writer/         # 商业网文逐章写作 + check_novel.py 质检
     └── testing/
         └── project-test-pipeline/ # 端到端测试闭环 skill（测试计划/执行/报告）
 ```

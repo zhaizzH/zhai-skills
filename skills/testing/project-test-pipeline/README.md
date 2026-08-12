@@ -52,3 +52,19 @@ cp -r skills/testing/project-test-pipeline <目标项目>/.claude/skills/
 
 - 跑其他项目：忽略 `references/at-project.md`（AnimeTracker 专属实例），按 SKILL.md 通用流程执行
 - 测试计划/报告产出：`docs/test/plan/test-plan-<日期>.md`、`docs/test/report/test-report-<日期>.md`
+
+---
+
+## 快速上手
+
+1. GitHub 拉取目标项目 → 构建运行
+2. 新建测试计划（`templates/test-plan-template.md` → `docs/test/plan/test-plan-<YYYYMMDD>.md`，禁止复用旧计划）
+3. 执行测试：一切结论必须证据链（命令输出/日志/DB/代码），无法验证标「未确认」
+4. 产出测试报告（缺陷 + 证据），缺陷交接用户处理，不代修
+5. 下一轮测试验证修复（`-r2` 新计划）
+
+## 来源与修改记录
+
+- **原创技能**：Hermes 测试闭环流程沉淀（非 fork）
+- 范围边界：只负责测试（发现问题 + 证据链报告），不含代码修改/修复
+

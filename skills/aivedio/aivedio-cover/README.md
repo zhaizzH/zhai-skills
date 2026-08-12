@@ -257,3 +257,22 @@ Examples:
 ## License
 
 MIT
+
+
+---
+
+## Triggers
+
+"make a cover", "thumbnail", "video cover", "add an image", "generate an image", "draw one", "poster", "avatar", "IP merch", "paper figure" — any image generation/editing request should route through this skill first.
+
+## Quick Start
+
+1. Run `scripts/check-mode.js` to detect the runtime mode (A local generate / B host image tools / C pure prompt consultant)
+2. Render a structured prompt from the template library (18 categories, 79 templates)
+3. Generate/edit; outputs auto-archive to `garden-aivedio-cover/` (`<task-slug>-<timestamp>`)
+4. Serves as the cover/art provider for aivedio-video (weekly-cover-design.md, swiss-ikb Klein blue, 3:4)
+
+## Origin & Changes
+
+- **Original skill**: distilled from the AiVedio project (not a fork)
+- **Inspiration**: template case library based on public cases from [ConardLi/gpt-image-2-101](https://github.com/ConardLi/gpt-image-2-101) (see the case library section of this README)
