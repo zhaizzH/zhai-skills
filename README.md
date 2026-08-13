@@ -6,18 +6,18 @@
 
 ```
 zhai-skills/
-├── README.md                      # 本文件：集合首页
-├── LICENSE                        # MIT 许可证
+├── README.md                       # 本文件：集合首页
+├── LICENSE                         # MIT 许可证
 └── skills/
-    ├── aivedio/                   # AiVedio 系列 skill 集合
-    │   ├── aivedio-cover/         # 图像生成 / 编辑 skill（GPT Image 2）
-    │   └── aivedio-video/         # AI 新闻周报「网页视频」生成 skill
-        ├── novel/                     # 网文创作系列 skill 集合
-    │   ├── qimao-novel-scraper/  # 七猫扫榜 → 挑标杆 → 拆前3章 → 新书设定
-    │   ├── fanqie-novel-scraper/ # 番茄扫榜（同构于七猫版，含字体混淆反爬方案）
-    │   └── novel-writer/         # 商业网文逐章写作 + check_novel.py 质检
+    ├── aivedio/                    # AiVedio 系列 skill 集合
+    │   ├── aivedio-cover/          # 图像生成 / 编辑 skill（GPT Image 2）
+    │   └── aivedio-video/          # AI 新闻周报「网页视频」生成 skill
+    ├── novel/                      # 网文创作系列 skill 集合
+    │   ├── qimao-novel-scraper/    # 七猫扫榜 → 挑标杆 → 拆前3章 → 新书设定
+    │   ├── fanqie-novel-scraper/   # 番茄扫榜（同构于七猫版，含字体混淆反爬方案）
+    │   └── novel-writer/           # 商业网文逐章写作 + check_novel.py 质检
     └── testing/
-        └── project-test-pipeline/ # 端到端测试闭环 skill（测试计划/执行/报告）
+        └── project-test-pipeline/  # 端到端测试闭环 skill（测试计划/执行/报告）
 ```
 
 ## Skills 一览
@@ -46,6 +46,18 @@ zhai-skills/
 - **句子级时间轴字幕**（srt / vtt / lrc 三份同步），剪映 / CapCut 可直接导入
 - 封面 / 配图由**兄弟 skill** [aivedio-cover](./skills/aivedio/aivedio-cover/README.zh-CN.md) 提供，风格锁 `references/weekly-cover-design.md`（3:4）
 - 固定 swiss-ikb 主题（瑞士国际主义 · 克莱因蓝 `#002FA7`），`tsc / build / vite` 验证闭环
+
+### [qimao-novel-scraper](./skills/novel/qimao-novel-scraper/README.md)
+
+七猫小说扫榜 → 挑标杆 → 拆解前3章 → 生成新书设定（多候选供用户选择）的一站式技能。Step 0 需求采集 + Step 1-8 全流程，产物落盘 `小说扫榜/<书名>/{正文,材料}/`。源自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（MIT），本仓库增强版。
+
+### [fanqie-novel-scraper](./skills/novel/fanqie-novel-scraper/README.md)
+
+番茄小说扫榜（同构于 qimao）：/rank 榜单 → /page 详情 → /reader 章节。正文有字体混淆反爬，用「渲染截图 + 视觉模型读图」还原（实测 100%）。本仓库自建（2026-08-12 实测）。
+
+### [novel-writer](./skills/novel/novel-writer/README.md)
+
+商业网文逐章写作技能：章法约束 + check_novel.py 质检脚本 + 长篇幅连续性。配合扫榜技能产出的设定/材料使用。源自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（MIT），本仓库增强版（质检脚本硬化）。
 
 ### [project-test-pipeline](./skills/testing/project-test-pipeline/README.md)
 
@@ -84,15 +96,3 @@ cp -r skills/aivedio/aivedio-cover  <目标项目>/.claude/skills/
 ## License
 
 MIT
-
-### [qimao-novel-scraper](./skills/novel/qimao-novel-scraper/README.md)
-
-七猫小说扫榜 → 挑标杆 → 拆解前3章 → 生成新书设定（多候选供用户选择）的一站式技能。Step 0 需求采集 + Step 1-8 全流程，产物落盘 `小说扫榜/<书名>/{正文,材料}/`。源自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（MIT），本仓库增强版。
-
-### [fanqie-novel-scraper](./skills/novel/fanqie-novel-scraper/README.md)
-
-番茄小说扫榜（同构于 qimao）：/rank 榜单 → /page 详情 → /reader 章节。正文有字体混淆反爬，用「渲染截图 + 视觉模型读图」还原（实测 100%）。本仓库自建（2026-08-12 实测）。
-
-### [novel-writer](./skills/novel/novel-writer/README.md)
-
-商业网文逐章写作技能：章法约束 + check_novel.py 质检脚本 + 长篇幅连续性。配合扫榜技能产出的设定/材料使用。源自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（MIT），本仓库增强版（质检脚本硬化）。
