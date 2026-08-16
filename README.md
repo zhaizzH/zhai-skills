@@ -17,7 +17,8 @@ zhai-skills/
     │   ├── fanqie-novel-scraper/   # 番茄扫榜（同构于七猫版，含字体混淆反爬方案）
     │   └── novel-writer/           # 商业网文逐章写作 + check_novel.py 质检
     └── testing/
-        └── project-test-pipeline/  # 端到端测试闭环 skill（测试计划/执行/报告）
+        ├── project-test-pipeline/ # 端到端测试闭环 skill（测试计划/执行/报告）
+        └── test-plan-authoring/   # 测试计划编写 skill（AI 可执行规格/五态/清理门禁）
 ```
 
 ## Skills 一览
@@ -68,6 +69,16 @@ zhai-skills/
 - 分层测试：Smoke Gate → L0 单元 → L2 前端构建 → L1 Agent 能力（LLM 四方核对）→ L3 接口契约 → L4 E2E 视觉
 - 数据完整性断言（图片 naturalWidth / 统计=DB 全量 / 导出行数=total）；高风险路径（full 导入）超时保护纳入测试
 - 自带 AnimeTracker 项目实例（`references/at-project.md`）、计划/报告模板、环境指纹采集与多视口截图脚本
+
+### [test-plan-authoring](./skills/testing/test-plan-authoring/README.md)
+
+**测试计划编写**：把测试计划写成「交给 Codex/Claude 等 AI 可直接执行的任务规格」（v2.0.0）。
+
+- **铁律**：先盘点后写数（数字来自当前代码实时盘点）、版本锚定（commit/产物/进程指纹）、数据可还原（无清理步骤的用例禁入）、数字可推导、未执行≠LIMITED
+- **状态五态**：PASS / FAIL / SKIP / LIMITED / 未执行；通过率与实际覆盖率分开统计，禁止用前者冒充总覆盖
+- **AI 执行者指令**（§0 八条）：端点以代码为准、按层串行、失败二分、禁中途注册、报告不写密钥、默认不自动提交、执行前版本指纹校验、执行后清理门禁
+- **清理门禁**：执行后强制重放 seed → 清 Redis 键 → 删 MinIO 对象 → 计数比对；失败路径也必须恢复
+- 含 11 条已知缺陷类回归项 + AnimeTracker 项目特定参考（测试账号/分层/已知基线）
 
 ## 安装与使用
 
