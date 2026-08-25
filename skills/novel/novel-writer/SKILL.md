@@ -34,6 +34,7 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 | 纯文学、征文、自留或文学模式 | [references/literary-mode.md](references/literary-mode.md) |
 | 正文创作、单章检查、全稿体检或分层润色 | [references/writing-and-revision.md](references/writing-and-revision.md) |
 | 达到 13 章或 5 万字、按卷创作、跨会话续写 | [references/long-form-continuity.md](references/long-form-continuity.md) |
+| 开新书：双书复盘避坑铁律（首句即冲突/全卷固定人称/伏笔≤30章/完结三件套等） | [references/review-lessons.md](references/review-lessons.md) |
 
 解析本 Skill 所在目录为 `<skill-dir>`。运行检查时调用 `<skill-dir>/scripts/check_novel.py`，不要把脚本重新写进提示词或项目目录。
 
@@ -75,6 +76,9 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 │       ├── 材料-情绪节拍表-<区间>-<日期>.md
 │       └── ...
 └── 扫榜/                           # 所有扫榜产物统一目录（文件名带日期区分批次），选定书名后并入 <书名>/材料/
+
+复盘/                              # 独立于 <书名>/，位于 novel-workshop 根（与 小说扫榜/ 同级）
+└── <书名>.md                      # 每本完结后写一份复盘，按小说名命名；含「复盘（达标项）」+「不足」两节，无不足则省略不足节
 ```
 
 开新书目录流程：
@@ -205,4 +209,5 @@ python3 <skill-dir>/scripts/check_novel.py manuscript \
 - 商业网文已通过 `references/shuanwen-tech.md` 的爽感自检。
 - 伏笔、人物状态、能力限制、时间、距离和数量前后一致。
 - 长篇的进度与续写入口已经更新到最后完成的章节。
+- **整本完结后，在 `复盘/<书名>.md` 写复盘（含「复盘（达标项）」+「不足」两节；无不足则省略不足节）。**
 - 最终报告列出已完成文件、总字数、检查结果和仍需用户决定的问题。
