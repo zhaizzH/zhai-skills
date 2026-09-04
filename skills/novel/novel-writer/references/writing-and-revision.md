@@ -20,7 +20,7 @@
 
 - 按去掉标题和空白后的含标点字符计数。
 - 单章目标允许上下浮动 200 字。
-- 保存为 `小说扫榜/<书名>/正文/第NN章-<书名>.md`（章号两位补零；标题放正文首行 `# 第NN章·章节名`）。
+- 保存为 `小说扫榜/<书名>/正文/第NN章-<书名>.md`（章号至少两位；标题放正文首行 `# 第01章·章节名`）。
 - 除章节标题外不使用 Markdown 引用、列表、表格、加粗或代码标记；投稿平台通常不解析这些语法。
 
 ### 视角与节奏
@@ -54,12 +54,15 @@
 
 ## 单章验证
 
+以下命令中的 `python3`：Windows 使用 `py -3` 或 `python`，macOS/Linux 使用 `python3`；要求 Python 3.10+。
+
 每章保存后运行统一脚本：
 
 ```bash
 python3 <skill-dir>/scripts/check_novel.py chapter \
   "小说扫榜/<书名>/正文/第NN章-<书名>.md" \
   --target 2500 \
+  --platform fanqie \
   --hero "主角名"
 ```
 
@@ -103,6 +106,7 @@ python3 <skill-dir>/scripts/check_novel.py chapter \
 ```bash
 python3 <skill-dir>/scripts/check_novel.py manuscript \
   "小说扫榜/<书名>/正文" \
+  --platform fanqie \
   --hero "主角名"
 ```
 

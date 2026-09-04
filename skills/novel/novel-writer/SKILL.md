@@ -63,7 +63,7 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 小说扫榜/
 ├── <书名>/                        # 每本书一个根目录（书名=用户选定后的书名）
 │   ├── 正文/
-│   │   ├── 第01章-<书名>.md      # 章号两位补零；标题放正文首行：# 第NN章·章节名
+│   │   ├── 第01章-<书名>.md      # 章号至少两位；标题放正文首行：# 第01章·章节名
 │   │   └── ...
 │   └── 材料/
 │       ├── novel-<书>-state.md    # 续写状态文件（每章更新，跨会话恢复入口）
@@ -114,7 +114,7 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 | 七猫小说 | ≤ 20 字 | `第一章 这就是`（标题部分 ≤20 字） |
 | 其他平台 | 待定 | 等实际使用该平台时再确认 |
 
-章节标题计入硬性约束：正文创作（阶段五）每章标题须在平台字数上限内，超限即修改。标题与正文内容一致，不含书名号《》包裹（正文标题格式：`# 第N章 · 标题`）。
+章节标题计入硬性约束：在选择书名候选前先询问用户发布平台，再自动确定章节标题上限（番茄 ≤30 字、七猫 ≤20 字）。正文创作（阶段五）每章标题须在平台字数上限内，超限即修改。标题与正文内容一致，不含书名号《》包裹，统一格式为 `# 第01章·标题`；其他平台必须由用户提供上限。
 
 ### 阶段二：角色 DNA
 
@@ -157,10 +157,13 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 3. 保存到 `小说扫榜/<书名>/正文/第NN章-<书名>.md`（标题放正文首行）。
 4. 运行单章检查：
 
+以下命令中的 `python3`：Windows 使用 `py -3` 或 `python`，macOS/Linux 使用 `python3`；要求 Python 3.10+。
+
 ```bash
 python3 <skill-dir>/scripts/check_novel.py chapter \
   "小说扫榜/<书名>/正文/第NN章-<书名>.md" \
   --target 2500 \
+  --platform fanqie \
   --hero "主角名"
 ```
 
@@ -188,6 +191,7 @@ python3 <skill-dir>/scripts/check_novel.py chapter \
 ```bash
 python3 <skill-dir>/scripts/check_novel.py manuscript \
   "小说扫榜/<书名>/正文" \
+  --platform fanqie \
   --hero "主角名"
 ```
 

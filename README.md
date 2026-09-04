@@ -75,7 +75,7 @@ cp -r skills/novel/novel-writer         <目标项目>/.claude/skills/
 | playwright MCP（浏览器工具） | 七猫/番茄扫榜、渲染页面取 DOM/截图 | 榜单 tab 为 JS 切换时需浏览器渲染 |
 | curl | 番茄/七猫 SSR 直抓详情与章节链接 | 番茄正文乱码，仍需视觉还原 |
 | 视觉模型（读图 OCR） | 番茄正文字体混淆反爬还原 | 截图后读图，实测 100% |
-| Python 3 | novel-writer 的 `check_novel.py` 质检 | 仅用标准库，无需额外依赖 |
+| Python 3.10+ | novel-writer 的 `check_novel.py` 质检与标准库回归测试 | 仅用标准库，无需额外依赖 |
 
 ## License
 

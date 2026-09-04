@@ -7,7 +7,12 @@
 - 感知词表：后脖算感知、后颈不算（词表里只有"后脖"）——审校时勿用"后颈"凑感知句，
   也不用纠正作者写"后颈"（真实身体感受，不算违规）。
 - 本文件基于 Yunshiro/yunn-skills novel-writer 原版硬化（加 --exclude-words），
-  其余规则与上游保持一字不差，避免与上游 diff 混乱。
+    其余规则与上游保持一字不差，避免与上游 diff 混乱。
+
+本项目增强规则：
+- 章节标题格式、文件章号和平台标题长度为硬性检查。
+- 第一章前 800 字必须出现身体感官；其他章节不重复应用这条开篇规则。
+- Windows 控制台统一使用 UTF-8 输出，避免中文网文检查在 GBK 控制台崩溃。
 """
 
 from __future__ import annotations
@@ -42,8 +47,11 @@ TEMPLATE_PATTERN = re.compile(
     r"前所未有|一字一顿|全场死寂|落针可闻|杀意弥漫|殊不知|旋即|就在这时"
 )
 POSTURE_PATTERN = re.compile(r"你自己想|你会知道的|到时候你就明白|我不解释")
-MARKDOWN_PATTERN = re.compile(r"^\s*[>*|+-]\s|`|\*\*", re.MULTILINE)
+MARKDOWN_PATTERN = re.compile(r"^\s*(?:#{1,6}\s|[>*|+-]\s)|`|\*\*", re.MULTILINE)
 NUMBER_UNIT_PATTERN = re.compile(r"[一二两三四五六七八九十百千]+(?:秒|分钟|时辰|遍|次|步|口)")
+TITLE_PATTERN = re.compile(r"^# 第(?P<number>\d{2,})章·(?P<title>\S.*)$")
+FILENAME_PATTERN = re.compile(r"^第(?P<number>\d{2,})章-(?P<book>.+)\.md$")
+PLATFORM_TITLE_LIMITS = {"fanqie": 30, "qimao": 20}
 
 
 @dataclass(frozen=True)
@@ -79,11 +87,68 @@ BASE_RULES = (
 
 
 def read_body(path: Path) -> tuple[str, str, list[int]]:
-    text = path.read_text(encoding="utf-8")
-    body = re.sub(r"^\s*#.*$", "", text, flags=re.MULTILINE)
+    text = path.read_text(encoding="utf-8-sig")
+    lines = text.splitlines()
+    # 只剥离首行章节标题；正文中的其他 Markdown 标记必须被检测出来。
+    body = "\n".join(lines[1:]) if lines and lines[0].lstrip().startswith("#") else text
     paragraphs = [part.strip() for part in body.splitlines() if part.strip()]
     lengths = [len(re.sub(r"\s", "", part)) for part in paragraphs]
     return text, body, lengths
+
+
+def resolve_title_limit(platform: str, title_limit: int | None = None) -> int:
+    """Resolve the immutable platform limit or validate an explicit other-platform limit."""
+    platform = platform.lower()
+    if platform in PLATFORM_TITLE_LIMITS:
+        if title_limit is not None:
+            raise ValueError(f"{platform} 平台标题上限由规则固定，不接受 --title-limit")
+        return PLATFORM_TITLE_LIMITS[platform]
+    if platform != "other":
+        raise ValueError("--platform 只能是 fanqie、qimao 或 other")
+    if title_limit is None or title_limit <= 0:
+        raise ValueError("other 平台必须提供正整数 --title-limit")
+    return title_limit
+
+
+def validate_title(path: Path, platform: str, title_limit: int | None = None) -> tuple[list[str], int | None]:
+    """Validate the canonical title and filename contract; return failures and chapter number."""
+    text = path.read_text(encoding="utf-8-sig")
+    first_line = text.splitlines()[0].strip() if text.splitlines() else ""
+    title_match = TITLE_PATTERN.fullmatch(first_line)
+    filename_match = FILENAME_PATTERN.fullmatch(path.name)
+    failures: list[str] = []
+    title_number: int | None = None
+    file_number: int | None = None
+
+    if not title_match:
+        failures.append("章节标题格式必须为：# 第01章·标题")
+    else:
+        title_number = int(title_match.group("number"))
+        title_text = title_match.group("title")
+        try:
+            limit = resolve_title_limit(platform, title_limit)
+        except ValueError as error:
+            failures.append(str(error))
+        else:
+            visible_length = len(re.sub(r"\s", "", title_text))
+            if visible_length > limit:
+                failures.append(f"章节标题字数={visible_length}，要求 ≤{limit}")
+
+    if not filename_match:
+        failures.append("章节文件名必须为：第01章-书名.md")
+    else:
+        file_number = int(filename_match.group("number"))
+        if title_number is not None and file_number != title_number:
+            failures.append(f"文件章号={file_number} 与标题章号={title_number} 不一致")
+
+    if first_line.count("#") == 0:
+        failures.append("缺少章节标题")
+    extra_headings = re.findall(r"^\s*#{1,6}\s", "\n".join(text.splitlines()[1:]), re.MULTILINE)
+    if extra_headings:
+        failures.append("正文包含额外 Markdown 标题")
+    # 文件名参与稿件排序，优先用它决定“第一章”规则；标题错误时仍不能绕过首章检查。
+    chapter_number = file_number if file_number is not None else title_number
+    return failures, chapter_number
 
 
 def longest_short_run(lengths: Iterable[int]) -> int:
@@ -99,31 +164,32 @@ def inspect(path: Path, hero: str = "", exclude_words: tuple[str, ...] = ()) -> 
     text, body, lengths = read_body(path)
     compact = re.sub(r"\s", "", body)
     word_count = len(compact)
-    perception = len(PERC_PATTERN.findall(text))
-    number_units = NUMBER_UNIT_PATTERN.findall(text)
+    perception = len(PERC_PATTERN.findall(body))
+    number_units = NUMBER_UNIT_PATTERN.findall(body)
     repeated_units = sorted({item for item in number_units if number_units.count(item) > 1})
     hero_pattern = re.compile(re.escape(hero) + r"[^。！？\n]{0,12}(?:" + PERC_PATTERN.pattern + r")") if hero else None
-    three_count = text.count("三") - sum(
-        word.count("三") * text.count(word) for word in exclude_words
-    )
+    sanitized = body
+    for word in sorted(set(word.strip() for word in exclude_words if word.strip()), key=len, reverse=True):
+        sanitized = sanitized.replace(word, "")
+    three_count = sanitized.count("三")
 
     return {
         "file": path.name,
         "word_count": word_count,
         "perception": perception,
-        "hero_perception": len(hero_pattern.findall(text)) if hero_pattern else None,
+        "hero_perception": len(hero_pattern.findall(body)) if hero_pattern else None,
         "per_500": round(perception / max(word_count / 500, 1), 1),
-        "body_feeling": len(BODY_PATTERN.findall(text)),
-        "anonymous_feedback": len(ANON_PATTERN.findall(text)),
-        "dash": text.count("——"),
+        "body_feeling": len(BODY_PATTERN.findall(body)),
+        "anonymous_feedback": len(ANON_PATTERN.findall(body)),
+        "dash": body.count("——"),
         "three": three_count,
-        "not_is": len(NOT_IS_PATTERN.findall(text)),
-        "even": len(EVEN_PATTERN.findall(text)),
-        "silence": len(SILENCE_PATTERN.findall(text)),
-        "simile": len(SIMILE_PATTERN.findall(text)),
-        "triple_enum": len(ENUM_PATTERN.findall(text)),
-        "template_phrase": len(TEMPLATE_PATTERN.findall(text)),
-        "posture": len(POSTURE_PATTERN.findall(text)),
+        "not_is": len(NOT_IS_PATTERN.findall(body)),
+        "even": len(EVEN_PATTERN.findall(body)),
+        "silence": len(SILENCE_PATTERN.findall(body)),
+        "simile": len(SIMILE_PATTERN.findall(body)),
+        "triple_enum": len(ENUM_PATTERN.findall(body)),
+        "template_phrase": len(TEMPLATE_PATTERN.findall(body)),
+        "posture": len(POSTURE_PATTERN.findall(body)),
         "markdown": len(MARKDOWN_PATTERN.findall(body)),
         "short_paragraphs": sum(length <= 15 for length in lengths),
         "max_short_run": longest_short_run(lengths),
@@ -157,8 +223,14 @@ def limit_text(rule: Rule) -> str:
     return f"{low}~{high}"
 
 
-def evaluate(metrics: dict[str, object], target: int | None) -> list[str]:
+def evaluate(
+    metrics: dict[str, object],
+    target: int | None,
+    title_failures: Iterable[str] = (),
+    chapter_number: int | None = None,
+) -> list[str]:
     failures: list[str] = []
+    failures.extend(title_failures)
     if target is not None:
         count = int(metrics["word_count"])
         if not target - 200 <= count <= target + 200:
@@ -172,11 +244,20 @@ def evaluate(metrics: dict[str, object], target: int | None) -> list[str]:
     repeated = metrics["repeated_units"]
     if repeated:
         failures.append(f"重复时间量词={repeated}")
+    if chapter_number == 1 and not metrics["opening_800_has_body"]:
+        failures.append("第一章前800字缺少身体感官")
     return failures
 
 
-def print_chapter(path: Path, metrics: dict[str, object], target: int | None) -> bool:
-    failures = evaluate(metrics, target)
+def print_chapter(
+    path: Path,
+    metrics: dict[str, object],
+    target: int | None,
+    platform: str,
+    title_limit: int | None = None,
+) -> bool:
+    title_failures, chapter_number = validate_title(path, platform, title_limit)
+    failures = evaluate(metrics, target, title_failures, chapter_number)
     print(f"\n{path.name}")
     if target is not None:
         ok = target - 200 <= int(metrics["word_count"]) <= target + 200
@@ -187,7 +268,10 @@ def print_chapter(path: Path, metrics: dict[str, object], target: int | None) ->
     if metrics["hero_perception"] is not None:
         print(f"  {'主角名附近感知':<14} {metrics['hero_perception']}")
     print(f"  {'重复时间量词':<14} {metrics['repeated_units'] or '无'}")
-    print(f"  {'开篇800字身体感':<14} {'有 ✓' if metrics['opening_800_has_body'] else '无 ✗'}")
+    if chapter_number == 1:
+        print(f"  {'第一章前800字身体感':<14} {'有 ✓' if metrics['opening_800_has_body'] else '无 ✗'}")
+    else:
+        print(f"  {'第一章前800字身体感':<14} 不适用")
     print("  人工检查：开篇500字人名≤3、地名≤1，且不要求读者现场计算。")
     if failures:
         print("  结论：未通过")
@@ -210,7 +294,17 @@ def chapter_files(directory: Path) -> list[Path]:
 
 
 def split_exclude(args: argparse.Namespace) -> tuple[str, ...]:
-    return tuple(w.strip() for w in args.exclude_words.split(",") if w.strip())
+    return tuple(dict.fromkeys(w.strip() for w in args.exclude_words.split(",") if w.strip()))
+
+
+def configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, OSError):
+                pass
 
 
 def run_chapter(args: argparse.Namespace) -> int:
@@ -218,7 +312,13 @@ def run_chapter(args: argparse.Namespace) -> int:
     if not path.is_file():
         print(f"错误：章节文件不存在：{path}", file=sys.stderr)
         return 2
-    return 0 if print_chapter(path, inspect(path, args.hero, split_exclude(args)), args.target) else 1
+    return 0 if print_chapter(
+        path,
+        inspect(path, args.hero, split_exclude(args)),
+        args.target,
+        args.platform,
+        args.title_limit,
+    ) else 1
 
 
 def run_manuscript(args: argparse.Namespace) -> int:
@@ -235,7 +335,8 @@ def run_manuscript(args: argparse.Namespace) -> int:
     print(f"{'章节':<24}{'字数':>7}{'感知':>7}{'密度':>7}{'身体':>7}{'无名':>7}{'破折号':>8}{'三':>5}{'沉默':>6}{'短段':>6}")
     for path in files:
         metrics = inspect(path, args.hero, split_exclude(args))
-        failures = evaluate(metrics, args.target)
+        title_failures, chapter_number = validate_title(path, args.platform, args.title_limit)
+        failures = evaluate(metrics, args.target, title_failures, chapter_number)
         print(
             f"{path.stem:<24}{metrics['word_count']:>7}{metrics['perception']:>7}"
             f"{metrics['per_500']:>7}{metrics['body_feeling']:>7}"
@@ -263,6 +364,8 @@ def build_parser() -> argparse.ArgumentParser:
     chapter = subparsers.add_parser("chapter", help="检查一个章节文件")
     chapter.add_argument("file", type=Path)
     chapter.add_argument("--target", type=int, required=True, help="目标字数，允许上下浮动 200 字")
+    chapter.add_argument("--platform", choices=("fanqie", "qimao", "other"), required=True, help="发布平台；决定章节标题字数上限")
+    chapter.add_argument("--title-limit", type=int, help="other 平台的章节标题字数上限")
     chapter.add_argument("--hero", default="", help="主角姓名，用于附加感知统计")
     chapter.add_argument("--exclude-words", default="", help="逗号分隔的角色名等专有名词，从其\"三\"字计数中扣除（如 钱三金）")
     chapter.set_defaults(func=run_chapter)
@@ -270,6 +373,8 @@ def build_parser() -> argparse.ArgumentParser:
     manuscript = subparsers.add_parser("manuscript", help="检查目录中的全部 Markdown 章节")
     manuscript.add_argument("directory", type=Path)
     manuscript.add_argument("--target", type=int, help="统一目标字数；各章目标不同时省略")
+    manuscript.add_argument("--platform", choices=("fanqie", "qimao", "other"), required=True, help="发布平台；决定章节标题字数上限")
+    manuscript.add_argument("--title-limit", type=int, help="other 平台的章节标题字数上限")
     manuscript.add_argument("--hero", default="", help="主角姓名，用于附加统计")
     manuscript.add_argument("--exclude-words", default="", help="逗号分隔的角色名等专有名词，从其\"三\"字计数中扣除（如 钱三金）")
     manuscript.set_defaults(func=run_manuscript)
@@ -277,8 +382,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    configure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args()
+    try:
+        resolve_title_limit(args.platform, args.title_limit)
+    except ValueError as error:
+        parser.error(str(error))
     return args.func(args)
 
 
