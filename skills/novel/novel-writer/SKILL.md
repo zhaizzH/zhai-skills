@@ -15,8 +15,9 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 
 1. 保证人物行为、故事因果和设定一致。
 2. 保证视角贴身和读者代入感。
-3. 移除模具句、机械排比与编排痕迹。
-4. 调整节奏、字数和格式。
+3. 保持用户确认的文风、角色声音与语言 DNA。
+4. 按白名单移除明确命中的 AI 痕迹。
+5. 调整节奏、字数和格式。
 
 商业网文中，代入感高于去 AI 味。不要为了减少心理活动而删掉主角的即时感知、身体反应、危险判断和明确欲望。
 
@@ -33,6 +34,7 @@ description: Create, continue, revise, or audit Chinese fiction through a staged
 | 商业网文的爽感引擎：差异感、迪化、异性倾慕、低调装逼、反转节奏、爽感自检 | [references/shuanwen-tech.md](references/shuanwen-tech.md) |
 | 纯文学、征文、自留或文学模式 | [references/literary-mode.md](references/literary-mode.md) |
 | 正文创作、单章检查、全稿体检或分层润色 | [references/writing-and-revision.md](references/writing-and-revision.md) |
+| 阶段六前五层完成后的最终去 AI 味终审 | [references/less-ai-tone.md](references/less-ai-tone.md) |
 | 达到 13 章或 5 万字、按卷创作、跨会话续写 | [references/long-form-continuity.md](references/long-form-continuity.md) |
 | 开新书：双书复盘避坑铁律（首句即冲突/全卷固定人称/伏笔≤30章/完结三件套等） | [references/review-lessons.md](references/review-lessons.md) |
 
@@ -183,8 +185,9 @@ python3 <skill-dir>/scripts/check_novel.py chapter \
 3. 节奏压缩：删除无功能段落和不改变局势的对话。
 4. 对话优化。
 5. 环境与心理活动优化。
+6. 白名单式去 AI 味终审：最后读取 `references/less-ai-tone.md`，冻结情节、信息和段落结构，只修改有明确触发标记的语言片段；没有命中的文字逐字保留。
 
-商业网文必须执行前三层；其余层根据章节重点执行。文学模式也执行去 AI 味检查，但不强制商业爽点与章末悬念。
+商业网文必须执行前三层和第六层；其余层根据章节重点执行。文学模式也执行第六层终审，但文学性排比、比喻和既定文风优先，不强制商业爽点与章末悬念。第六层完成后重新运行机械检查；若机械修复会破坏人物、因果、代入感或已确认文风，停止自动修改并报告冲突。
 
 全稿完成后运行：
 
@@ -210,6 +213,7 @@ python3 <skill-dir>/scripts/check_novel.py manuscript \
 - 所有必要确认节点均已通过，或用户明确要求跳过。
 - 角色、大纲、节拍和正文文件路径符合规范。
 - 每章机械检查通过，且完成无法脚本化的人工通读。
+- 全稿已按 `references/less-ai-tone.md` 完成白名单式终审，未改变情节、事实、人物动机或段落顺序。
 - 商业网文已通过 `references/shuanwen-tech.md` 的爽感自检。
 - 伏笔、人物状态、能力限制、时间、距离和数量前后一致。
 - 长篇的进度与续写入口已经更新到最后完成的章节。
