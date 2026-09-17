@@ -1356,6 +1356,14 @@ def _doc_layer_block() -> list[str]:
     return out
 
 
+def _footer_notes() -> list[str]:
+    """两个 builder 共用的收尾：本规范不管代码怎么写。"""
+    return [
+        "> 各版本的抽象方式、模块拆分、命名细节**不受本规范约束** —— 那正是风格差异的体现。",
+        "> 本规范只管「放在哪、叫什么」，不管「怎么写」。",
+        "",
+    ]
+
 def build_single_file_section(area_name: str, mapping: dict[str, str],
                               profile: Profile = SINGLE_FILE) -> str:
     """single-file profile 的规范节。
@@ -1505,9 +1513,7 @@ def build_single_file_section(area_name: str, mapping: dict[str, str],
             f"`{SUBMIT_DIR}/`，审计也跳过这一块。交付物就留在各版版本目录里。"
         )
         out.append("")
-        out.append("> 各版本的抽象方式、模块拆分、命名细节**不受本规范约束** —— 那正是风格差异的体现。")
-        out.append("> 本规范只管「放在哪、叫什么」，不管「怎么写」。")
-        out.append("")
+        out.extend(_footer_notes())
         return "\n".join(out)
 
     out.append("**区根「%s/」：每个版本一份提交包**" % SUBMIT_DIR)
@@ -1580,9 +1586,7 @@ def build_single_file_section(area_name: str, mapping: dict[str, str],
             f"完整文件清单与「改完代码怎么重跑校验与报告」属于区根 `{AREA_SUMMARY}`。"
         )
     out.append("")
-    out.append("> 各版本的抽象方式、模块拆分、命名细节**不受本规范约束** —— 那正是风格差异的体现。")
-    out.append("> 本规范只管「放在哪、叫什么」，不管「怎么写」。")
-    out.append("")
+    out.extend(_footer_notes())
     out.append(
         f"> **与实验报告技能的分工**：本节的 `{SUBMIT_DIR}/` 是**版本区内**的交付包。"
         "仓库根的课程提交目录属于课程提交约定，归报告类技能管，"
@@ -1642,7 +1646,6 @@ def build_snapshot_section(area_name: str, mapping: dict[str, str],
         "对照用的文档属于区根 `" + AREA_SUMMARY + "`，编译产物与临时探针放仓库根的 `out/`。"
     )
     out.append("")
-
     out.append("**本 profile 不做这几类检查**（不是放宽，是前提不成立）")
     out.append("")
     out.append(
@@ -1670,13 +1673,11 @@ def build_snapshot_section(area_name: str, mapping: dict[str, str],
     out.append("")
     out.append(
         "1. 禁止改 `src/` 内的任何源码 —— 快照须与原分支逐字一致，"
-        "要改写法就回源区改、重新导出，**不要在本区 `vNN/` 里直接编辑**；"
-        "否则 `diff` 出来的差异会混入手工痕迹，各版对照的可信度就没了。"
+        "要改写法就回源区改、重新导出（就地编辑会让 `diff` 混入手工痕迹，对照可信度失效）。"
     )
     out.append(
-        "2. 禁止在版本根放 `src/` 之外的东西（构建产物如 `out/`、探针、手写文档、"
-        "报告都不算数，审计不看你也不该提交）；"
-        "IDE 元数据（`.iml`/`.iws`/`.ipr`/`.idea/`）同样**不入库、不检查**。"
+        "2. 禁止在版本根放 `src/` 之外的任何文件或目录（构建产物、探针、"
+        "手写文档、报告、IDE 文件都不算数）。"
     )
     out.append(
         f"3. 禁止在版本目录里放任何 md —— 文档只有区根一份 `{AREA_SUMMARY}`。"
@@ -1685,9 +1686,7 @@ def build_snapshot_section(area_name: str, mapping: dict[str, str],
 
     out.extend(_doc_layer_block())
 
-    out.append("> 各版本的抽象方式、模块拆分、命名细节**不受本规范约束** —— 那正是风格差异的体现。")
-    out.append("> 本规范只管「放在哪、叫什么」，不管「怎么写」。")
-    out.append("")
+    out.extend(_footer_notes())
     return "\n".join(out)
 
 

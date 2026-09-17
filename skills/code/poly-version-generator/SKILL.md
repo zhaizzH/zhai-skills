@@ -52,9 +52,6 @@ poly-version-generator/scripts/audit_layout.py
 快照型为何豁免这几类检查（前提不成立，不是放宽）、以及为何不收 IDE 文件，
 见 [`references/rules.md`](references/rules.md)。
 
-**快照型不收 IDE 文件**（2026-09-22 定）。`.iml` 曾经是版本根的必需项，现已**撤掉**：
-它是 IDE 元数据而非版本产物、本就可重新生成，锁它换不来「每版能独立编译运行」。
-
 > 换 profile 不是「同一套规矩换个说法」，是真的两套规矩。
 > 区文档没写 `profile` 行时，可用 `--profile <名>` 临时指定。
 
