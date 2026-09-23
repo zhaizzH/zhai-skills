@@ -1,0 +1,52 @@
+# === Python ===
+# skills/ 下的脚本（check_novel.py、init_skill.py 等）运行时产生
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# 构建 / 安装产物
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 测试与工具缓存
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# === 技能打包产物 ===
+# skill-creator-cn/scripts/package_skill.py 在 ./dist 或当前目录生成的 <skill>.zip
+*.zip
+
+# === 编辑器 / IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === 操作系统 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Claude Code ===
+# 本机个人配置，不随仓库分发。本仓库的技能源文件统一放在 skills/ 下，
+# README 中提到的 .claude/skills/ 是「目标项目」的路径，与本目录无关。
+.claude/
+
+# === 临时文件 ===
+*.log
+*.tmp
