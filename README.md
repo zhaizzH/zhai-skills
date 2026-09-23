@@ -2,7 +2,7 @@
 
 个人自用的 Claude Code / Claude Skills 集合仓库。按需取用，把 `skills/` 下对应的 skill 目录复制到目标项目的 `.claude/skills/` 即可直接使用。
 
-当前收录 **网文创作（novel）系列** 三个技能，串成一条「扫榜选题 → 产出设定 → 逐章写作」的流水线。
+当前收录两组技能：**网文创作（novel）系列** 三个技能，串成一条「扫榜选题 → 产出设定 → 逐章写作」的流水线；**代码工程（code）系列** 两个技能，分别管多版本对照目录规范与技能本身的创建。
 
 ## 目录结构
 
@@ -11,20 +11,23 @@ zhai-skills/
 ├── README.md                       # 本文件：集合首页
 ├── LICENSE                         # MIT 许可证
 └── skills/
-    └── novel/                      # 网文创作系列 skill 集合
-        ├── qimao-novel-scraper/    # 七猫扫榜 → 挑标杆 → 拆前3章 → 新书设定
-        ├── fanqie-novel-scraper/   # 番茄扫榜（同构于七猫版，含字体混淆反爬方案）
-        └── novel-writer/           # 商业网文逐章写作 + check_novel.py 质检
-            ├── SKILL.md
-            ├── README.md
-            ├── references/         # 规划/商业/爽感/文学/写作润色/长篇连续性/复盘铁律
-            ├── scripts/check_novel.py  # 确定性质检脚本
-            └── agents/openai.yaml
+    ├── novel/                      # 网文创作系列 skill 集合
+    │   ├── qimao-novel-scraper/    # 七猫扫榜 → 挑标杆 → 拆前3章 → 新书设定
+    │   ├── fanqie-novel-scraper/   # 番茄扫榜（同构于七猫版，含字体混淆反爬方案）
+    │   └── novel-writer/           # 商业网文逐章写作 + check_novel.py 质检
+    │       ├── SKILL.md
+    │       ├── README.md
+    │       ├── references/         # 规划/商业/爽感/文学/写作润色/长篇连续性/复盘铁律
+    │       ├── scripts/check_novel.py  # 确定性质检脚本
+    │       └── agents/openai.yaml
+    └── code/                       # 代码工程系列 skill 集合
+        ├── poly-version-generator/ # 多版本对照目录规范 + 交付物打包
+        └── skill-creator-cn/       # 技能创建器中文本（含 init/package/validate 脚本）
 ```
 
 ## 技能流水线
 
-三个技能前后衔接，典型用法是：先用扫榜技能（七猫或番茄二选一）做选题决策、产出新书设定与三份材料，再交给 novel-writer 逐章落地成稿。
+三个网文技能前后衔接，典型用法是：先用扫榜技能（七猫或番茄二选一）做选题决策、产出新书设定与三份材料，再交给 novel-writer 逐章落地成稿。
 
 ```
 [qimao / fanqie-novel-scraper]           [novel-writer]
@@ -55,6 +58,20 @@ zhai-skills/
 - 触发词：「写小说」「写第 N 章」「续写小说」「质检章节」「修复章节质检」
 - 源自 [Yunshiro/yunn-skills](https://github.com/Yunshiro/yunn-skills)（MIT），本仓库增强版（`check_novel.py` 支持 `--exclude-words`、感知词表修正；references 增补长批量实测经验）。
 
+### [poly-version-generator](./skills/code/poly-version-generator/SKILL.md)
+
+「同一目标、N 个对照版本」项目的目录存放规范与交付物打包。只回答一个问题：第 N 个版本的产物放在哪、叫什么名字——不管代码怎么写（那正是风格差异的来源），只保证不同版本的同名文件能直接对照（`diff v01/x v02/x` 有锚点）。提供 single-file（N 种风格各写一遍，锁单文件与行数）与 source-snapshot（同一项目各改一遍，只锁 `src/`）两套 profile，入口名与必需产物清单可由区文档配置行覆盖。典型场景是课程实验的多版本对照，各份要能当各自独立的提交交出去。规范真源是 `scripts/audit_layout.py`，可审计已有版本布局是否合规。
+
+- 触发词：「多版本对照」「N 个版本」「版本目录规范」「打包提交包」「审计版本布局」
+- 本仓库自建，目录规范与打包脚本均在 `scripts/` 内。
+
+### [skill-creator-cn](./skills/code/skill-creator-cn/SKILL.md)
+
+创建/更新 Claude 技能的中文指南。讲清技能结构与 YAML 前置元数据、何时该拆出 `references/` 与 `scripts/`、以及多步骤工作流如何写成 SKILL.md，并配套三个脚本：`init_skill.py` 生成技能骨架、`package_skill.py` 打包成可分发的 zip、`quick_validate.py` 校验前置元数据与目录结构。
+
+- 触发词：「创建技能」「新建 skill」「写一个 skill」「打包技能」「校验 skill」
+- 源自 Anthropic 官方 skill-creator，本仓库中文本（LICENSE.txt 保留上游条款）。
+
 ## 安装与使用
 
 每个 skill 自包含。使用时把它整个目录复制到目标项目的 `.claude/skills/` 下：
@@ -64,6 +81,10 @@ zhai-skills/
 cp -r skills/novel/qimao-novel-scraper  <目标项目>/.claude/skills/
 cp -r skills/novel/fanqie-novel-scraper <目标项目>/.claude/skills/
 cp -r skills/novel/novel-writer         <目标项目>/.claude/skills/
+
+# 代码工程：按需取用
+cp -r skills/code/poly-version-generator <目标项目>/.claude/skills/
+cp -r skills/code/skill-creator-cn       <目标项目>/.claude/skills/
 ```
 
 > novel-writer 的质检脚本以 `<skill-dir>/scripts/check_novel.py` 调用（`<skill-dir>` 为部署后的 skill 目录），不要把脚本重新写进提示词或项目目录。
