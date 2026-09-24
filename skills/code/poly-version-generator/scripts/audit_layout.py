@@ -337,9 +337,27 @@ POLY_VERSION = Profile(
     stray_hint="版本根只该有 src/（IDE 文件不入库，探针与构建产物放仓库根）",
 )
 
-PROFILES: dict[str, Profile] = {p.key: p for p in (POLY_VERSION,)}
-DEFAULT_PROFILE = POLY_VERSION.key
+SOURCE_SNAPSHOT = Profile(
+    key="source-snapshot",
+    title="source-snapshot",
+    intro="同一既有项目 N 种风格**各改一遍**，每版是完整源码快照，故只锁 `src/`。",
+    spec=(
+        ("src/", True,
+         "该分支的完整源码快照，**照抄原项目的包结构**。本 profile 只锁 `src/`，"
+         "内部有几个包、几个 `.java` 一律不管；IDE 元数据（`.iml`/`.idea/`）不收录"),
+    ),
+    glob_required=(),
+    # 快照型不套用「交付用词」词表：每版是既有项目的原样快照，改词就破坏了
+    # 「与原分支逐字一致」这个前提。
+    java_forbidden_words=(),
+    java_forbidden_re=None,
+    java_header_command_check=False,
+    allowed_root_suffixes=frozenset(),
+    stray_hint="版本根只该有 src/（IDE 文件不入库，探针与构建产物放仓库根）",
+)
 
+PROFILES: dict[str, Profile] = {p.key: p for p in (POLY_VERSION, SOURCE_SNAPSHOT)}
+DEFAULT_PROFILE = POLY_VERSION.key
 # 区根共享文件：n 个版本共有，版本目录里不得出现同名文件
 AREA_FILES: tuple[tuple[str, str], ...] = (
     (AREA_SUMMARY, "区根**唯一一份**文档：规范节 + 版本→风格映射 + 各版状态 + 横向结论"),
@@ -468,11 +486,28 @@ def _source_files(version_dir: Path, profile: Profile) -> list[Path]:
     本 profile 只管「放在哪」：源码都在 `src/` 下，语言不限，
     所以**不按扩展名筛 Java**，而是把 `src/` 下所有参与审计的文件都当源码。
     `src/` 不在的版本由 4.2 报必需目录缺失，这里返回空。
+
+    但**二进制文件要跳过**：`src/img/*.jpg` 这类资源按 UTF-8 强读，里面的字节
+    会碰巧凑出 `v30`、`契约` 这类能匹配的字符串，报出一堆假阳性。用词检查
+    只对文本有意义，故按「能否解码为 UTF-8」筛。
     """
     src = version_dir / "src"
     if not src.is_dir():
         return []
-    return [p for p in _actual_files(version_dir) if p.parts[0] == "src"]
+    return [p for p in _actual_files(version_dir)
+            if p.parts[0] == "src" and _is_text_file(version_dir / p)]
+
+def _is_text_file(path: Path) -> bool:
+    """是不是文本文件：能整份解码为 UTF-8 就算。
+
+    比按扩展名白名单稳：源码后缀随语言变（`.java`/`.py`/`.kt`…），
+    而资源后缀（`.jpg`/`.png`/`.wav`/`.class`）反而固定。
+    """
+    try:
+        path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return False
+    return True
 
 
 def _actual_files(version_dir: Path) -> list[Path]:

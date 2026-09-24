@@ -32,22 +32,26 @@ poly-version-generator/scripts/audit_layout.py
 | [`references/rules.md`](references/rules.md) | 想知道某条硬性规则的完整清单与理由 |
 | [`references/troubleshooting.md`](references/troubleshooting.md) | 审计报错时对照处理 |
 
-## 一套 profile：`poly-version`
+## 两套 profile：`poly-version` / `source-snapshot`
 
 版本区在区根文档里声明自己用哪套规矩（一行 `` - `profile` = `poly-version` ``），
 审计器自己读。
 
-| | `poly-version` |
-|---|---|
-| 版本是什么 | 同一目标的若干独立实现，整体结构相同、内部细节各异 |
-| 版本根锁什么 | 只有 `src/` |
-| `src/` 内部 | **不管** —— 几个子目录、几个源文件、怎么分包一律自定 |
-| 行数上限 | 无 |
-| 交付源码用词检查 | 有（版本号/风格名/模式名/「契约」+ 文件头编译运行命令） |
-| `提交/` 提交包 | 不做（本技能已取消该功能） |
+| | `poly-version` | `source-snapshot` |
+|---|---|---|
+| 版本是什么 | 同一目标的若干独立实现，整体结构相同、内部细节各异 | 同一份代码的 N 个**冻结快照**，逐版独立演进 |
+| 版本根锁什么 | 只有 `src/` | 只有 `src/` |
+| `src/` 内部 | **不管** —— 几个子目录、几个源文件、怎么分包一律自定 | 同左 |
+| 行数上限 | 无 | 无 |
+| 交付源码用词检查 | 有（版本号/风格名/模式名/「契约」+ 文件头编译运行命令） | **无**（快照内容来自既有代码，不该按新写代码的用词规矩审） |
+| 截图与提交包 | 由 `batch-screenshot-submit` 技能负责 | 同左 |
+
+**两套 profile 的区别只在用词检查**：`source-snapshot` 的源文件是既有代码的
+冻结副本，强加「源码里不许带版本号」之类的规矩会把快照改到与原件不符 ——
+那正好毁掉快照的意义。
 
 > 区文档没写 `profile` 行时按 `poly-version` 审，并在输出里提示补一行。
-> `--profile <名>` 可显式指定，但当前只有一个可选值。
+> `--profile <名>` 可显式指定。
 
 ## 配置行：换语言 / 换实验的入口
 
@@ -160,3 +164,26 @@ python $A <版本区> --only v03             # 只审一个
 
 本技能**只管道内**：版本区 `poly-<实验>/` 与其下的 `vNN/`。
 仓库根那些顶层目录（如课程提交目录）归**报告类技能**管，本技能不碰。
+
+## 与 `batch-screenshot-submit` 的分工
+
+| 技能 | 管什么 |
+|---|---|
+| 本技能 | 版本区**放在哪、叫什么**（目录布局）；并提供 `check_code.py` 当前置检查 |
+| `batch-screenshot-submit` | 让版本区**跑起来、截到图、打成可提交的包** |
+
+两者可以对接：截图技能在编译前会先跑本技能的 `check_code.py`，
+未全 PASS 就整体中止。**截图技能不改本技能管的任何源文件。**
+
+## 自检
+
+两个脚本各带一份不依赖真实版本区的判据自检：
+
+```bash
+python poly-version-generator/scripts/test_check_code.py
+python poly-version-generator/scripts/test_audit_layout.py
+```
+
+改动 `check_code.py` / `audit_layout.py` 后跑一遍，都输出 `SELF-CHECK OK` 才算改对了。
+`test_audit_layout.py` 盯的是一处真实踩过的假阳性：二进制资源（`src/img/*.jpg`）
+被当源码做用词检查，字节凑出 `v30` 让整批版本误报。
