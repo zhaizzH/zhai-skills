@@ -1,6 +1,6 @@
 ---
 name: poly-version-generator
-description: "管理「同一目标、N 个对照版本」项目的目录存放规范，并负责为每个版本生成独立的提交包。当一个目标要用多种风格独立实现并横向对比、需要在版本区里建立 v01~vNN 目录结构、要为各版导出可独立交付的交付物（区根 提交 目录下按版本名分目录，或 _pack.py）、或要审计已有版本的文件布局是否符合规范时使用。两套 profile：single-file（N 种风格各写一遍，锁单文件与行数）与 source-snapshot（同一项目各改一遍，只锁 src/，不收 IDE 文件）；入口名、行数上限、必需产物清单都可由区文档的配置行覆盖，故换语言或换实验不必改脚本。典型场景是课程实验的多版本对照（如《算法设计与分析》同一实验的五个写法），各份要能当各自独立的提交交出去。只管目录存放与交付物打包，不管代码怎么写。"
+description: "管理「同一目标、N 个对照版本」项目的目录存放规范。当一个目标要用多种风格独立实现并横向对比、需要在版本区里建立 v01~vNN 目录结构、或要审计已有版本的文件布局是否符合规范时使用。单一 profile poly-version：版本根只锁 src/，内部结构不限；入口名与必需产物清单可由区文档的配置行覆盖，故换语言或换实验不必改脚本。典型场景是课程实验的多版本对照（如《算法设计与分析》同一实验的五个写法），各份要能当各自独立的提交交出去。只管目录存放，不管代码怎么写。"
 ---
 
 # 多版本对照项目的目录规范
@@ -12,9 +12,7 @@ description: "管理「同一目标、N 个对照版本」项目的目录存放�
 > **第 N 个版本的产物放在哪、叫什么名字？**
 
 **不管代码怎么写。** 抽象方式、模块拆分、命名细节、依赖选择各版自定 —— 那正是风格差异的来源。
-规范只保证一件事：**不同版本的同名文件能直接对照**，`diff v01/x v02/x` 有锚点。
-
-**管不管得着「怎么写」，由 profile 定** —— 见下。
+规范只保证一件事：**同一目标下各版整体结构相同**，`diff v01/src v02/src` 有锚点。
 
 ## 唯一真源
 
@@ -24,7 +22,7 @@ description: "管理「同一目标、N 个对照版本」项目的目录存放�
 poly-version-generator/scripts/audit_layout.py
 ```
 
-里面的 `SINGLE_FILE` / `SNAPSHOT` 两个 `Profile` 就是规范本身。本文件和各区
+里面的 `POLY_VERSION` 这个 `Profile` 就是规范本身。本文件和各区
 `项目总结.md` 的第一节都是它的派生 —— **不要手抄一份树到别处**。
 
 配套参考（按需查阅，不必通读）：
@@ -32,28 +30,24 @@ poly-version-generator/scripts/audit_layout.py
 | 文件 | 何时看 |
 |---|---|
 | [`references/rules.md`](references/rules.md) | 想知道某条硬性规则的完整清单与理由 |
-| [`references/troubleshooting.md`](references/troubleshooting.md) | 审计报错、`_pack.py` 报错时对照处理 |
+| [`references/troubleshooting.md`](references/troubleshooting.md) | 审计报错时对照处理 |
 
-## 两套 profile
+## 一套 profile：`poly-version`
 
-版本区类型不同，「什么算违规」就不同。区在区根文档里声明自己用哪套
-（一行 `` - `profile` = `<名>` ``），审计器自己读。
+版本区在区根文档里声明自己用哪套规矩（一行 `` - `profile` = `poly-version` ``），
+审计器自己读。
 
-| | `single-file` | `source-snapshot` |
-|---|---|---|
-| 版本是什么 | 一个目标 N 种风格**各写一遍**，代码是实现物 | 同一既有项目 N 种风格**各改一遍**，每版是完整源码快照 |
-| 版本根锁什么 | 入口文件 + 该区声明的产物 | 只有 `src/` |
-| `src/` 内部 | 禁止 —— 代码必须单文件 | **不管** —— 照抄原项目的包结构 |
-| 行数上限 | 有（`max_lines`，缺省 150 物理行） | 无 |
-| 交付源码用词检查 | 有（版本号/风格名/模式名/「契约」） | **不做** |
-| `提交/` 每版一份 | 有（声明了 `submit` 时） | 不生成 |
-| 典型区 | `poly-singleton-demo`、算法实验 | `poly-singleton`、`poly-prototype-shallow` |
+| | `poly-version` |
+|---|---|
+| 版本是什么 | 同一目标的若干独立实现，整体结构相同、内部细节各异 |
+| 版本根锁什么 | 只有 `src/` |
+| `src/` 内部 | **不管** —— 几个子目录、几个源文件、怎么分包一律自定 |
+| 行数上限 | 无 |
+| 交付源码用词检查 | 有（版本号/风格名/模式名/「契约」+ 文件头编译运行命令） |
+| `提交/` 提交包 | 不做（本技能已取消该功能） |
 
-快照型为何豁免这几类检查（前提不成立，不是放宽）、以及为何不收 IDE 文件，
-见 [`references/rules.md`](references/rules.md)。
-
-> 换 profile 不是「同一套规矩换个说法」，是真的两套规矩。
-> 区文档没写 `profile` 行时，可用 `--profile <名>` 临时指定。
+> 区文档没写 `profile` 行时按 `poly-version` 审，并在输出里提示补一行。
+> `--profile <名>` 可显式指定，但当前只有一个可选值。
 
 ## 配置行：换语言 / 换实验的入口
 
@@ -61,34 +55,27 @@ poly-version-generator/scripts/audit_layout.py
 
 | 形状 | 含义 | 例 |
 |---|---|---|
-| `` `profile` `` | 选哪套规矩 | `` - `profile` = `source-snapshot` `` |
+| `` `profile` `` | 选哪套规矩 | `` - `profile` = `poly-version` `` |
 | `` `<Xxx>` ``（带尖括号） | 占位符映射：把规范里的占位符指到本实验的实际名 | `` - `<Xxx>` = `SingletonDemo` `` |
-| 其它标识符 | **配置覆盖**（下表，全部可选） | `` - `max_lines` = `260` `` |
+| 其它标识符 | **配置覆盖**（下表，全部可选） | `` - `entry` = `<Xxx>Experiment.java` `` |
 
 | 配置键 | 缺省 | 作用 |
 |---|---|---|
-| `entry` | `single-file` → `<Xxx>Experiment.java` | 入口文件模式，**换语言就改这里** |
-| `max_lines` | `150` | 入口文件物理行上限；`0` = 不限 |
-| `required` | 见 profile | 版本根必需项，**写了就只查列出的这些**。清单写法见下 |
-| `submit` | `single-file` → 5 项 | 提交包清单；留空 = 本区不生成提交包 |
-| `java_checks` | 按 profile | `on`/`off`：交付用词与「头部编译运行命令」检查 |
+| `entry` | 空（不锁具体入口名） | 入口文件模式，**换语言就改这里** |
+| `required` | 见 profile（`src/`） | 版本根必需项，**写了就只查列出的这些**。清单写法见下 |
+| `java_checks` | `on` | `on`/`off`：交付用词与「头部编译运行命令」检查 |
 
-**不写任何配置行 = 改造前的行为** —— 既有版本区无需迁移。
+**不写任何配置行 = 用 profile 的缺省。**
 
-清单键三种写法等价（反引号对内逗号分隔 / 每值一对反引号 / 分多行）。要用
-`_pack.py` 打包就得把它写进 `required`，否则它会被判「多出顶层文件」。
-
-`<Xxx>` 的值是实际名，`` `<报告名>` `` 要写**含扩展名的完整文件名**。
-`source-snapshot` 区可整块不写映射行（它只锁 `src/`）。
+清单键三种写法等价（反引号对内逗号分隔 / 每值一对反引号 / 分多行）。
 
 ```markdown
-- `profile` = `source-snapshot`
+- `profile` = `poly-version`
 - `<Xxx>` = `MergeSort`
-- `<报告名>` = `实验一 合并排序.docx`
-- `max_lines` = `260`
+- `entry` = `<Xxx>Experiment.java`
 ```
 
-## 四种用法
+## 三种用法
 
 ### 1. 建新版本区
 
@@ -99,7 +86,6 @@ poly-version-generator/scripts/audit_layout.py
    ```bash
    A=poly-version-generator/scripts/audit_layout.py
    python $A <版本区> --emit-spec -o spec.md
-   python $A <版本区> --emit-spec --profile source-snapshot -o spec.md
    ```
 
    生成物自带首尾边界（首行 `<!-- 本节由 poly-version-generator/scripts/audit_layout.py --emit-spec 生成，勿手改 -->`、末行
@@ -109,8 +95,7 @@ poly-version-generator/scripts/audit_layout.py
 
 ### 2. 只留一份文档：`项目总结.md`
 
-**整个版本区只有这一份 md，版本目录里一份不留。** 四块内容与来源
-（迁移前的四份文档已并入本文件，不要再新建）：
+**整个版本区只有这一份 md，版本目录里一份不留。** 四块内容与来源：
 
 | 块 | 原属 | 记什么 |
 |---|---|---|
@@ -122,24 +107,14 @@ poly-version-generator/scripts/audit_layout.py
 **少写文档 ≠ 少记信息。** 最容易丢的是**「这版为什么多/少一个文件」** ——
 `diff` 只显示两版差在哪，不说明那是有意为之还是漏了；解释必须落在第三块里。
 
-### 3. 生成提交包（每版各一份，仅声明了 `submit` 的区）
+### 3. 审计布局
 
-在每版目录里各跑一次 `python _pack.py`，把该版交付物复制到区根 `提交/<版本名>/`。
-各版互不覆盖，顺序无所谓；已打包过要重建时加 `--force`。**`_pack.py` 必须在
-`required` 清单里** —— 否则版本根放不下它，改用「照 `submit` 逐项挑进 `提交/<版本名>/`」。
-
-清单、覆盖语义与 README 要点见 [`references/pack-submissions.md`](references/pack-submissions.md)。
-
-### 4. 审计布局
-
-每批版本做完后跑一遍；生成提交包之后再跑一遍（它会顺带审 `提交/`）：
+每批版本做完后跑一遍：
 
 ```bash
 A=poly-version-generator/scripts/audit_layout.py
 python $A <版本区>
 python $A <版本区> --only v03             # 只审一个
-python $A <版本区> --no-submit            # 跳过 提交/
-python $A <版本区> --profile source-snapshot  # 区文档没写 profile 行时
 ```
 
 退出码 0 = 全 PASS，1 = 有版本 FAIL。输出是逐版本的 PASS/FAIL 表，
@@ -147,27 +122,20 @@ python $A <版本区> --profile source-snapshot  # 区文档没写 profile 行�
 
 - **区根文档**单独一块：`CONTRACT.md`/`PLAN.md`/`REPORT.md` 只要还在就会被报 ——
   判据是**文件存在**，不是内容为空。
-- `提交/` **不存在不算错**（还没打包时本就不该有）；一旦存在，目录名必须恰好是版本名，
-  每个版本目录的清单要**严格**匹配，多一个少一个都 FAIL。
-- 快照型下 `提交/` 那一块直接跳过并说明。
-- 审计只查「放哪、叫什么」，**不看文件内容与功能实现**。
+- 审计只查「放哪、叫什么」加交付用词，**不看功能实现**。
 
 ## 核心约束速查
 
 完整的表与逐条理由见 [`references/rules.md`](references/rules.md)。最常撞上的几条：
 
 - 区根只有一份 `项目总结.md`，版本目录里**不放任何 md**；
-- `single-file`：**代码必须单文件**（递归查子目录），入口文件不得超过 `max_lines`；
-- `single-file`：交付源码里不得出现版本号/风格名/模式名/「契约」（有机器检查）；
-- `run_output.txt` 必须由运行重定向产生 —— 手写 = 数据作废；
-- 报告 docx、`_make_report.py`、`_pack.py` 都在**版本根**，不藏进子目录；
-- `source-snapshot`：版本根**只有 `src/`**，且**禁止改 `src/` 内任何源码**；
+- 版本根只有 `src/`，其余顶层文件/目录一律 FAIL；
+- 交付源码里不得出现版本号/风格名/模式名/「契约」，也不得在文件头抄编译运行命令
+  （有机器检查，可用 `java_checks` = `off` 关闭）；
+- 各版 `src/` 内部结构自定，但**整体结构要一致**，`diff` 才有锚点；
 - 编译产物与临时文件一律忽略，**所以 `javac` 跑过之后再审计也能 PASS**。
 
 ## 与实验报告技能的分工
 
-本技能**只管道内**：版本区 `poly-<实验>/`、其下的 `vNN/`、以及版本区内的 `提交/`。
+本技能**只管道内**：版本区 `poly-<实验>/` 与其下的 `vNN/`。
 仓库根那些顶层目录（如课程提交目录）归**报告类技能**管，本技能不碰。
-
-**两个 `提交` 目录不是一回事**：版本区里的 `poly-<实验>/提交/<版本名>/` 归本技能
-（每版一份交付物）；仓库根的 `<实验名>_提交/` 归报告技能（最终交给老师的目录）。

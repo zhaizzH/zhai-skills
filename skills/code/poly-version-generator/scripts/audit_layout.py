@@ -6,41 +6,29 @@
 其它地方（SKILL.md 的说明、各区 `项目总结.md` 的规范节）都从这里派生，
 不要再手抄一份树 —— 手抄的那份一定会漂。
 
-# 两套 profile
+# 一套 profile：poly-version
 
-区自己在区根文档里声明用哪套（一行 `` - `profile` = `<名>` ``）。两套的规矩不同，
-因为「什么算违规」本来就取决于「版本是什么」：
+版本是**同一目标、整体结构相同**的若干实现，内部命名等细节各版自定。
+版本根只锁 `src/`，`src/` 内部一律不管（分包、拆几个文件、命名都由各版自定）。
 
-  single-file      一个目标 N 种风格**各写一遍**，代码是实现物。
-                   → 锁单文件、行数上限、交付用词、区根 `提交/` 每版一份。
-  source-snapshot  同一既有项目 N 种风格**各改一遍**，每版是完整源码快照。
-                   → 只锁 `src/`，`src/` 内部一律不管，IDE 元数据一律不管。
+无行数上限、无单文件约束、无 `提交/` 提交包 —— 只保证一件事：
+**不同版本的同名文件能直接对照**，`diff v01/x v02/x` 有锚点。
 
-快照型下**不做**单文件/行数/交付用词/README/`提交/` 这几类检查 —— 不是因为
-「快照区可以糊弄」，而是因为那几条的**前提在快照型下不成立**：
+保留的检查只有交付用词（版本号/风格名/设计模式名/「契约」+ 文件头编译运行命令）——
+各版要能当独立的人写的东西交出去，源码里不能留横向对照的内部概念。
 
-  · 快照是已冻结的物料，本就分包多文件（原项目十几个 `.java`），「实现必须单文件」无意义；
-  · 快照逐字复制自原分支，**不许就地改**，所以「改掉违规用词」这个动作本身被禁止；
-  · 交付用词检查会误伤：「契约」在中文源码里是**普通词**（接口约定），不是本项目
-    `CONTRACT.md` 的简称专属；而子串检查分不出这两种用法，所以快照型一律不跑它。
+一句话：规范只管「放在哪、叫什么」，不管「怎么写」。「怎么写」由各版自定。
 
-一句话：规范只管「放在哪、叫什么」，不管「怎么写」；而**管不管得着「怎么写」，
-由 profile 定**。
-
-# 四种用法（审计 / 单版审计 / 生成规范节 / 临时指定 profile）
+# 四种用法（审计 / 单版审计 / 生成规范节 / 省略 profile 行）
 
     # 审计：逐个版本比对实际文件与 SPEC，输出 PASS/FAIL 表
-    python audit_layout.py SingletonPattern/poly-singleton-demo
+    python audit_layout.py SingletonPattern/poly-singleton
 
     # 只审一个版本
-    python audit_layout.py SingletonPattern/poly-singleton-demo --only v03
+    python audit_layout.py SingletonPattern/poly-singleton --only v03
 
     # 生成区根文档里那一节规范（第一次建版本区时做一次；树变了再生成一次）
-    python audit_layout.py SingletonPattern/poly-singleton-demo --emit-spec -o spec.md
-    python audit_layout.py SingletonPattern/poly-singleton --emit-spec --profile source-snapshot
-
-    # 文档里没写 profile 行时，用 --profile 临时指定（例如手写第一节的老区）
-    python audit_layout.py PrototypePattern/poly-prototype-shallow --profile source-snapshot
+    python audit_layout.py SingletonPattern/poly-singleton --emit-spec -o spec.md
 
 退出码：0 = 全部 PASS；1 = 有版本 FAIL（或用法/参数错误）。
 
@@ -113,7 +101,7 @@ LEGACY_VERSION_DOCS = ("MANIFEST.md",)
 PLACEHOLDER_RE = re.compile(r"^<[^<>]*>$")
 # 配置行总则：`键` = `值`。一条正则收下三类键，形状区分：
 #
-#     `profile`   = `source-snapshot`      → profile 选择
+#     `profile`   = `poly-version`        → profile 选择
 #     `<Xxx>`     = `SingletonDemo`        → 占位符映射（带尖括号）
 #     其它标识符   = 值                     → 配置覆盖（见 CONFIG_KEYS）
 #
@@ -122,9 +110,9 @@ PLACEHOLDER_RE = re.compile(r"^<[^<>]*>$")
 #
 # 三点比「一对反引号夹一个值」更宽，都是被清单键逼出来的（见 CONFIG_LIST_KEYS）：
 #
-#   1. 值可空 —— 文档说 `submit` **留空 = 本区不生成提交包**，而 `` `submit` = `` ``
-#      （两个反引号之间什么都没有）在原来的 `[^`]+` 下**根本匹配不到**，于是那一行
-#      被整个丢弃、`submit` 保持缺省的 5 项 —— 「声明为空」静默失效。
+#   1. 值可空 —— 配置键都可留空（如 `required` = `` 表示「本版无必需产物」），而
+#      `` `required` = `` ``（两个反引号之间什么都没有）在原来的 `[^`]+` 下
+#      **根本匹配不到**，于是那一行被整个丢弃、键保持缺省 —— 「声明为空」静默失效。
 #      改成 `[^`]*` 后空值能解析出来，再由 `_split_config_list` 归成空清单。
 #   2. 值里放行逗号 —— 一个反引号对里可以写多项
 #      （`` - `required` = `main.py, _pack.py` ``）。`[^`]+` 本来就不排除逗号，
@@ -152,34 +140,27 @@ PROFILE_RE = CONFIG_RE
 # 全部可选；不写 = 用 profile 的缺省（即改造前的行为）。
 #
 #   entry       入口文件模式（glob 或字面名，可含占位符）。覆盖 profile 的入口约定。
-#   max_lines   每个源文件的物理行上限；`0` = 不限。覆盖 JAVA_MAX_LINES。
 #   required    版本根必需项，逗号分隔（可含占位符）。只列这些，不在列的**不检查**。
-#   submit      提交包清单，逗号分隔；空串 = 本区不生成提交包。
 #
-# 两个清单键都接受**每个值各加一对反引号**的写法（多行或同一行都行）：
+# 清单键接受**每个值各加一对反引号**的写法（多行或同一行都行）：
 #
-#     - `required` = `main.py`, `_pack.py`
+#     - `required` = `main.py`, `facts.py`
 #
 # `CONFIG_RE` 一次只收一对反引号，故 `_classify_config` 按出现次序合并同名清单键 ——
 # 先转 dict 会静默丢掉第二项。只有清单键合并，其余键仍取末值。
 #   java_checks `on`/`off`：交付用词与「头部编译运行命令」检查。
 CONFIG_KEYS: tuple[str, ...] = (
-    "entry", "max_lines", "required", "submit", "java_checks",
+    "entry", "required", "java_checks",
 )
 
 # 其中「值是逗号分隔清单」的键。它们的自然写法是**每个值各自加一对反引号**：
 #
-#     - `required` = `main.py`, `_pack.py`
+#     - `required` = `main.py`, `facts.py`
 #
 # 而 `CONFIG_RE` 只认「一对反引号夹键 = 一对反引号夹值」，于是这条行只会读出
-# `('required', 'main.py')` —— `_pack.py` 静默丢失。所以这几个键要按**出现次序合并**，
+# `('required', 'main.py')` —— `facts.py` 静默丢失。所以这几个键要按**出现次序合并**，
 # 不能像标量键那样取末值（见 `_classify_config`）。
-CONFIG_LIST_KEYS: tuple[str, ...] = ("required", "submit")
-
-# 打包入口脚本的约定名。规范节的提交段与审计提示都按这个名字说「跑 python _pack.py」，
-# 但 `required` 一旦声明就只认列出的项 —— 冲突时见 `_packer_permitted` 与 `_apply_config`
-# 末尾的自洽性检查。
-PACKER_NAME = "_pack.py"
+CONFIG_LIST_KEYS: tuple[str, ...] = ("required",)
 
 # 旧 profile 行/映射行的键名（`profile` 不带尖括号，其余带）
 PROFILE_KEY = "profile"
@@ -248,7 +229,7 @@ class Profile:
     """一套版本区规矩。
 
     `spec` 是版本目录内的条目表，形状与旧版一致：每条 = (相对 vNN/ 的路径, 必需?, 说明)。
-    含 "/" 且结尾是 "/" 的是目录；`glob_required` 里的路径按通配匹配（见 _check_glob_required）；
+    含 "/" 且结尾是 "/" 的是目录；`glob_required` 里的路径按通配匹配；
     其余是文件。说明会原样写进规范节的表格里，用祈使句、说清为什么。
     """
 
@@ -256,31 +237,18 @@ class Profile:
     title: str
     intro: str
     spec: tuple[tuple[str, bool, str], ...]
-    # 入口文件名模式（可含占位符，如 `<Xxx>Experiment.java`）。空 = 沿用
-    # 「`<Xxx>Experiment.java`」这一 Java 约定；区文档的 `entry` 配置行可覆盖。
-    # 换语言时改这一个键即可，不必动脚本。
+    # 入口文件模式（可含占位符，如 `<Xxx>Experiment.java`）。空 = 不校验具体名字，
+    # 由区文档的 `entry` 配置行指派。
     entry: str = ""
-    # 通配必需项：路径 → glob。用于名字由映射行指派的必需品，如 ("<报告名>", "*.docx")。
+    # 通配必需项：路径 → glob。用于名字由映射行指派的必需品。
     glob_required: tuple[tuple[str, str], ...] = ()
-    # 区根 `提交/`（每版一份交付包）；空元组 = 本 profile 不生成提交包
-    submit_files: tuple[tuple[str, str], ...] = ()
-    # 单个 .java 的物理行数上限；None = 不设上限
-    java_max_lines: int | None = None
-    # 是否强制「代码实现必须单文件 + 入口名固定」。这是**核心约束**，
-    # 与行数上限分开：配置行能把 `max_lines` 设成 0 取消行数限制，
-    # 但取消不了这一条 —— 它才是「single-file」这个 profile 的定义。
-    enforce_single_file: bool = False
-    # 允许存在的额外 .java 名（入口文件由映射行的 <Xxx> 指派）
-    java_allowed_extra: frozenset[str] = frozenset()
     # 交付源码禁用词与「文件头禁抄编译/运行命令」
     java_forbidden_words: tuple[str, ...] = ()
     java_forbidden_re: re.Pattern[str] | None = None
     java_header_command_check: bool = False
-    # README.txt 里不得出现的开发侧名字；None = 本 profile 不查 README
-    readme_forbidden: tuple[str, ...] | None = None
     # 版本根允许出现、但不写进 SPEC 的文件后缀
     allowed_root_suffixes: frozenset[str] = frozenset()
-    # 「多出顶层文件」的提示语（各 profile 的落点不同）
+    # 「多出顶层文件」的提示语
     stray_hint: str = ""
 
 
@@ -307,8 +275,8 @@ class Profile:
 # 属于 README.txt 的职责。**行内**提到 `javac` 不算（例如警告某个写法会多一次编译），
 # 只查文件头部的独立命令行。
 #
-# ⚠️ 本类检查**只在 `single-file` profile 下运行**。快照型下源码是冻结物料，
-# 不许就地改，且「契约」等词本就可能出现在原项目的正常中文里 —— 见本文件头部说明。
+# ⚠️ 本类检查**只在这是单一 profile 时才会有实际效果**。若区文档用 `java_checks`
+# 把它关掉（或词表为空），审计就不跑它 —— 见 `_apply_config`。
 #
 # ⚠️ 例外：「实验一 合并排序」**不算**禁用词 —— 它就是实验题目，报告标题与 README 都要用。
 JAVA_FORBIDDEN_WORDS: tuple[str, ...] = (
@@ -323,135 +291,44 @@ JAVA_HEADER_COMMAND_RE = re.compile(
     r"^\s*(?:\*\s*|/\*\s*|//\s*)?(?:编译|运行)\s*[:：]?\s*(?:javac|java)\b")
 JAVA_HEADER_LINES = 15
 
-# 每个 .java 的**物理行数**上限（含注释与空行，即 `wc -l` 的数）。
-# 用户的硬性要求：五个方案代码都不要超过 150 行。口径是物理行，不是代码行 ——
-# 所以注释与空行也占额度，注释必须写得克制。
-# 这条与「单文件」是一对：单文件管「不许拆成几个文件」，行数上限管「不许写长」，
-# 两者共同逼出「同一文件内组织方式的差异」，而不是靠规模堆砌拉开区别。
-JAVA_MAX_LINES = 150
-
-# README.txt 里**不得出现**的开发侧名字。README 是交付说明，会被 `_pack.py` 逐字复制进
-# 区根 `提交/`，而提交包里没有区根总结、也没有 `report/` 与 `test/` ——
-# 在 README 里列这些名字，到了提交包就成了指向不存在文件的悬空引用。
-# 这类过期文案 `verify_report.py`（只查数字可溯源）和布局检查**都抓不到**，
-# 只能靠这条子串检查兜住。
-README_FORBIDDEN: tuple[str, ...] = (
-    "MANIFEST", "项目总结", "_make_report", "report/", "test/",
-    "verify_counts", "verify_report", "audit_layout",
-)
-
-# ── profile ①：单文件实现型 ──────────────────────────────────────────
-SINGLE_FILE = Profile(
-    key="single-file",
-    title="single-file",
-    intro="一个目标 N 种风格**各写一遍**，代码是实现物，故约束单文件与行数。",
+# ── profile：整体结构相同、内部细节各异 ─────────────────────────────────
+#
+# 版本是**同一目标、整体结构相同**的若干实现：版本根的骨架逐字一致
+# （同一份 `src/` 布局、同一批入口路径），各版**内部命名与实现细节**自定。
+#
+# 所以只锁 `src/`：里面原有几个包、几个源文件、怎么分包，一律不管。
+# 无行数上限、无单文件约束、无 `提交/` 提交包 —— 规范只管「放在哪、叫什么」。
+#
+# 唯一保留的内容检查是交付用词（与文件头编译运行命令）：各版要能当**独立的人**
+# 写的东西交出去，源码里不能留横向对照的内部概念（版本号、风格名、模式名、「契约」）。
+#
+# 为何仍不收 IDE 文件（`.iml`/`.idea/`）：它们是 IDE 本机状态，不是版本产物，
+# 可重新生成，也不是交给老师的东西 —— 审计直接忽略。
+POLY_VERSION = Profile(
+    key="poly-version",
+    title="poly-version",
+    intro="同一目标整体结构相同、内部细节各异的若干实现，故只锁 `src/`。",
     spec=(
-        # ---- 版本根目录的固定文件 ----
-        ("<Xxx>Experiment.java", True,
-         "课程提交用源程序。名固定（`<Xxx>` 由本区的映射行指派），跨版本 `diff` 的锚点"),
-        ("Screenshot.java", True, "截图工具。名固定，各版一致，不做变体"),
-        ("run_output.txt", True,
-         "程序真实输出，由 stdout 重定向产生；**禁手写、禁编辑**，改过即作废"),
-        ("README.txt", True,
-         "**交付说明**：文件说明 + 编译运行方法。只许描述提交包里的那几个文件 —— "
-         "它会被 `_pack.py` 逐字复制进区根 `提交/`，提到区根总结/`report/`/`test/` "
-         "就成了指向不存在文件的悬空引用（本脚本会查，见 `README_FORBIDDEN`）"),
-        ("_make_report.py", True, "报告生成入口。放版本根目录，便于跨版对照"),
-        ("_pack.py", True,
-         "打包入口：把本版交付物复制到区根 `提交/`。与 `_make_report.py` 同理放版本根，"
-         "各版同名以便跨版对照"),
-        # `<报告名>` 按约定是**含扩展名的完整文件名**（如 `实验一 合并排序.docx`），
-        # 故这里不再补 .docx —— 补了会变成 `…….docx.docx`
-        ("<报告名>", True,
-         "生成的报告，**必须在版本根目录**（不是子目录），便于统一打包；"
-         "`<报告名>` 含扩展名，由映射行指派"),
-
-        # ---- 报告层：目录与三个文件名都固定 ----
-        ("report/", True,
-         "报告与解析的 Python 层。**目录及内部三个文件名都固定** —— 技能存在的前提是"
-         "「不同人的同名文件能直接对照」，各版另起名字则 `diff` 无从下手。"
-         "层内怎么抽象、拆几个函数、是否再分文件，各版自定"),
-        ("report/parse.py", True, "解析 `run_output.txt`，登记成事实表"),
-        ("report/facts.py", True, "事实表 / 数据模型定义"),
-        ("report/render.py", True, "排版组织：把事实表渲染成文档"),
-
-        # ---- 弹性区：可自由增删，风格差异的落点 ----
-        ("test/", False,
-         "校验脚本（计数比对、输出结构完整性等）。**可自由增删**"),
+        ("src/", True,
+         "该版本的完整源码，**整体结构与其它版一致**（同一批入口与包路径），"
+         "内部命名与实现细节自定。本 profile 只锁 `src/`，内部有几个包、"
+         "几个源文件一律不管；IDE 元数据（`.iml`/`.idea/`）不收录"),
     ),
-    glob_required=(("<报告名>", "*.docx"),),
-    submit_files=(
-        ("<Xxx>Experiment.java", "入口源程序（单文件）"),
-        ("Screenshot.java", "截图工具"),
-        ("run_output.txt", "程序真实输出，由 stdout 重定向产生"),
-        ("README.txt", "交付说明，由 `_pack.py` 从版本根**逐字复制**而来"),
-        ("<报告名>", "报告 docx"),
-    ),
-    java_max_lines=JAVA_MAX_LINES,
-    enforce_single_file=True,
-    java_allowed_extra=frozenset({"Screenshot.java"}),
+    glob_required=(),
     java_forbidden_words=JAVA_FORBIDDEN_WORDS,
     java_forbidden_re=JAVA_FORBIDDEN_RE,
     java_header_command_check=True,
-    readme_forbidden=README_FORBIDDEN,
-    allowed_root_suffixes=frozenset({".docx"}),
-    stray_hint="校验脚本放 test/",
-)
-
-# ── profile ②：源码快照型 ───────────────────────────────────────────
-#
-# 每版是既有项目的**完整源码快照**，只锁 `src/`。
-#
-# 为什么**不**把 `.iml` 列进版本根的必需项（曾经列过，2026-09-22 撤掉）：
-#
-#  1. 它是 IDE 元数据，不是版本产物。用户定：**版本区不收录 IDEA 文件**。
-#  2. 它其实是**可推导的**，锁它并不能换来「每版能独立编译运行」——
-#     各区 `.iml` 都是同一份样板（只有 `$MODULE_DIR$/src` 一个 sourceFolder，
-#     不依赖兄弟版本），所以某版临时缺了，从任一版复制一份、或让 IDE 重认
-#     source root 即可。重跑与截图从来就不缺依据 —— 原项目本来就怎么跑，
-#     版本区照旧怎么跑，不必靠 `vNN/` 里的 `.iml`。
-#  3. 逐版改名（`v01.iml`…`v05.iml`）与五版同名都出现过，锁名字等于把
-#     「实验语义」写进布局规范。
-#
-# 结果：本 profile 只认 `src/` —— 而这正是快照区真正的交付物，也是唯一
-# 能证明「这几版是同一物料的若干写法」的东西。
-SNAPSHOT = Profile(
-    key="source-snapshot",
-    title="source-snapshot",
-    intro="同一既有项目 N 种风格**各改一遍**，每版是完整源码快照，故只锁 `src/`。",
-    spec=(
-        ("src/", True,
-         "该分支的完整源码快照，**照抄原项目的包结构**。本 profile 只锁 `src/`，"
-         "内部有几个包、几个 `.java` 一律不管；IDE 元数据（`.iml`/`.idea/`）不收录"),
-    ),
-    glob_required=(),
-    submit_files=(),
-    java_max_lines=None,
-    java_allowed_extra=frozenset(),
-    java_forbidden_words=(),
-    java_forbidden_re=None,
-    java_header_command_check=False,
-    readme_forbidden=None,
     allowed_root_suffixes=frozenset(),
-    stray_hint="版本根只该有 src/（IDE 文件不入库）",
+    stray_hint="版本根只该有 src/（IDE 文件不入库，探针与构建产物放仓库根）",
 )
 
-PROFILES: dict[str, Profile] = {p.key: p for p in (SINGLE_FILE, SNAPSHOT)}
-DEFAULT_PROFILE = SINGLE_FILE.key
+PROFILES: dict[str, Profile] = {p.key: p for p in (POLY_VERSION,)}
+DEFAULT_PROFILE = POLY_VERSION.key
 
 # 区根共享文件：n 个版本共有，版本目录里不得出现同名文件
 AREA_FILES: tuple[tuple[str, str], ...] = (
     (AREA_SUMMARY, "区根**唯一一份**文档：规范节 + 版本→风格映射 + 各版状态 + 横向结论"),
 )
-
-
-def _submit_files(profile: Profile) -> tuple[tuple[str, str], ...]:
-    """本 profile 的交付清单；不生成提交包的 profile 返回空元组。
-
-    用空元组而不是 None 表达「没有提交包」：调用方不必到处判空，
-    「有没有」只用一个真假判断就够。
-    """
-    return profile.submit_files
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -505,13 +382,13 @@ def _classify_config(raw: list[tuple[str, str]]
 
     **入参是 `findall` 的原始对子列表，不是 dict**。这一点是必需的：清单键的两种
     写法都要求「同一键可以出现多次」—— 每值一对反引号时，`CONFIG_RE` 会把
-    `` `required` = `main.py`, `_pack.py` `` 读成两个同键对子；就算值写在一个反引号对里
-    （`main.py, _pack.py`），分成两行写也还是同键两处。先转成 `dict` 会按同名键覆盖，
+    `` `required` = `main.py`, `facts.py` `` 读成两个同键对子；就算值写在一个反引号对里
+    （`main.py, facts.py`），分成两行写也还是同键两处。先转成 `dict` 会按同名键覆盖，
     静默丢掉后面那些值。这里按**出现次序**分组，再由下面的规则决定合并还是取末值。
 
     | 键 | 同名重复时 |
     |---|---|
-    | `CONFIG_LIST_KEYS`（`required`/`submit`） | **按次序合并**（值内去重） |
+    | `CONFIG_LIST_KEYS`（`required`） | **按次序合并**（值内去重） |
     | `profile`、`<Xxx>` 映射、其余标量键 | **取末值** —— 与改造前 `dict()` 的覆盖语义逐字一致 |
     """
     mapping: dict[str, str] = {}
@@ -546,10 +423,10 @@ def _read_area_meta(area_root: Path
 
     形如：
 
-        - `profile` = `source-snapshot`
+        - `profile` = `poly-version`
         - `<Xxx>` = `SingletonDemo`
-        - `<报告名>` = `实验 单例模式演示.docx`
-        - `max_lines` = `260`          ← 可选，覆盖 profile 的缺省
+        - `entry` = `<Xxx>Experiment.java`   ← 可选，覆盖 profile 的入口约定
+        - `java_checks` = `off`             ← 可选，关掉交付用词检查
 
     返回 (mapping, profile_key, config, 实际读到的文档路径)。
     优先读 `项目总结.md`；过渡期读不到就退回 `CONTRACT.md`（并在审计输出里点明）。
@@ -570,9 +447,17 @@ def _posix(p: str | Path) -> str:
     return Path(p).as_posix()
 
 
-def submit_file_names(mapping: dict[str, str], profile: Profile) -> list[str]:
-    """区根 `提交/` 里应有的文件名（占位符按映射展开）。"""
-    return [Path(_expand(t, mapping)).name for t, _ in _submit_files(profile)]
+def _source_files(version_dir: Path, profile: Profile) -> list[Path]:
+    """交付源码文件集（相对 vNN/ 的路径）—— 用词检查的对象。
+
+    本 profile 只管「放在哪」：源码都在 `src/` 下，语言不限，
+    所以**不按扩展名筛 Java**，而是把 `src/` 下所有参与审计的文件都当源码。
+    `src/` 不在的版本由 4.2 报必需目录缺失，这里返回空。
+    """
+    src = version_dir / "src"
+    if not src.is_dir():
+        return []
+    return [p for p in _actual_files(version_dir) if p.parts[0] == "src"]
 
 
 def _actual_files(version_dir: Path) -> list[Path]:
@@ -591,24 +476,13 @@ def _actual_files(version_dir: Path) -> list[Path]:
 def _entry_name(mapping: dict[str, str], profile: Profile) -> str | None:
     """本 profile 的入口文件名（展开占位符后）。
 
-    `profile.entry` 优先；没写则退回 Java 约定 `<Xxx>Experiment.java`。
-    两者都不可用时返回 None（只有目录、没有入口名的情况）。
+    `profile.entry` 优先；区文档的 `entry` 配置行可覆盖。没写则返回 None
+    （本 profile 默认不锁具体入口名，入口路径由「各版整体结构一致」保证）。
     """
-    tmpl = profile.entry or ("<Xxx>Experiment.java" if "Xxx" in mapping else "")
+    tmpl = profile.entry
     if not tmpl:
         return None
     return Path(_expand(tmpl, mapping)).name
-
-
-def _allowed_java_names(mapping: dict[str, str], profile: Profile) -> set[str]:
-    """本规范允许存在的 .java 文件名（不含路径）。"""
-    allowed = set(profile.java_allowed_extra)
-    if "Xxx" in mapping:
-        allowed.add(f"{mapping['Xxx']}Experiment.java")
-    entry = _entry_name(mapping, profile)
-    if entry and entry.endswith(".java"):
-        allowed.add(entry)
-    return allowed
 
 
 def _allowed_root_names(mapping: dict[str, str], profile: Profile) -> set[str]:
@@ -623,8 +497,8 @@ def _allowed_root_names(mapping: dict[str, str], profile: Profile) -> set[str]:
 
 
 def _allowed_root_dirs(mapping: dict[str, str], profile: Profile) -> set[str]:
-    """版本根允许出现的目录名（弹性区 + 必需目录）。"""
-    allowed: set[str] = set()
+    """版本根允许出现的目录名（弹性区 + 必需目录）。`src/` 恒为允许的。"""
+    allowed: set[str] = {"src"}
     for tmpl, _, _ in profile.spec:
         if tmpl.endswith("/"):
             allowed.add(Path(_expand(tmpl, mapping)).name)
@@ -665,32 +539,6 @@ def _top_level_strays(version_dir: Path, mapping: dict[str, str],
 # 四、审计
 # ══════════════════════════════════════════════════════════════════════
 
-def _java_line_count(p: Path) -> int:
-    """.java 的物理行数（与 `wc -l` 一致：以换行为准，末尾无换行则不计最后一行）。"""
-    return len(p.read_text(encoding="utf-8", errors="replace").split("\n")) - 1
-
-
-def _check_glob_required(version_dir: Path, tmpl: str, glob: str,
-                         mapping: dict[str, str], why: str) -> list[str]:
-    """通配必需项：版本根下按 glob 找，数量必须恰为 1；给了映射还要名字对得上。
-
-    用于 `<报告名>`（`*.docx`）这类 —— 名字由映射行指派，不适合在 SPEC 里写死。
-    """
-    found = [p for p in sorted(version_dir.glob(glob))
-             if not _is_ignored(Path(p.name))]
-    if not found:
-        return [f"缺必需文件 {tmpl}（版本根目录下一个 {glob} 都没有）—— {why}"]
-    if len(found) > 1:
-        return ["版本根目录有 %d 个 %s（%s），只应有一个"
-                % (len(found), glob, "、".join(p.name for p in found))]
-    key = _placeholder_key(tmpl)
-    if key and key in mapping:
-        want = Path(_expand(tmpl, mapping)).name
-        if found[0].name != want:
-            return [f"文件名不符：期望 {want}，实际 {found[0].name}"]
-    return []
-
-
 def audit_version(version_dir: Path, mapping: dict[str, str],
                   profile: Profile) -> list[str]:
     """审计一个版本目录，返回违规描述列表（空 = PASS）。"""
@@ -703,15 +551,14 @@ def audit_version(version_dir: Path, mapping: dict[str, str],
         if (version_dir / name).exists():
             problems.append(f"版本目录里不该有 {name}（它是区根共享的文档，只有一份）")
 
-    # ── 4.2 必需文件 / 必需目录 ───────────────────────────────────
-    glob_map = dict(profile.glob_required)
+    # ── 4.2 必需文件 / 必需目录 ─────────────────────────────────
+    # 本 profile 只锁 `src/`。区文档的 `required` 声明的是 **`src/` 下的相对路径**
+    # （如 `Main.java`、`pkg/Util.java`），所以非目录项统一挂到 `src/` 下查。
+    # `src/` 本身恒为必需目录，不因 `required` 覆盖而消失。
+    if not (version_dir / "src").is_dir():
+        problems.append("缺必需目录 src/")
     for tmpl, required, why in profile.spec:
         if not required:
-            continue
-
-        if tmpl in glob_map:
-            problems.extend(_check_glob_required(
-                version_dir, tmpl, glob_map[tmpl], mapping, why))
             continue
 
         if tmpl.endswith("/"):
@@ -721,85 +568,16 @@ def audit_version(version_dir: Path, mapping: dict[str, str],
 
         if _is_placeholder(tmpl, mapping):
             continue                      # 无映射：只查目录，不查具体名
-        expanded = _expand(tmpl, mapping)
-        if not (version_dir / expanded).is_file():
-            problems.append(f"缺必需文件 {_posix(expanded)}")
+        rel = Path("src") / _expand(tmpl, mapping)
+        if not (version_dir / rel).is_file():
+            problems.append(f"缺必需文件 {_posix(rel)}")
 
-    # ── 4.3 入口文件不得改名（仅单文件型，Java 惯例）──────────────
-    # 保留原始的 Java 专用判断：入口缺席/写错的兜底在 4.4a（按 `entry` 判，
-    # 覆盖非 Java 区）。这里只报「有 .java 却没一个是入口名」的改名情形。
-    if profile.enforce_single_file and "Xxx" in mapping:
-        want = f"{mapping['Xxx']}Experiment.java"
-        java_top = [p.name for p in _actual_files(version_dir)
-                    if "/" not in p.as_posix() and p.name.endswith(".java")]
-        if java_top and want not in java_top:
-            problems.append(
-                f"入口文件被改名：期望 {want}，版本根实际有 {'、'.join(java_top)}"
-            )
-
-    # ── 4.4 代码实现必须单文件（仅单文件型）───────────────────────
-    # 注意：这里扫的是**递归**的全部 .java，不只是顶层。若只查顶层，
-    # 把辅助类塞进 src/ 或 java/ 这类子目录就能绕过「单文件」约束。
-    if profile.enforce_single_file:
-        allowed_java = _allowed_java_names(mapping, profile)
-        extra_java = [p for p in _actual_files(version_dir)
-                      if p.name.endswith(".java") and p.name not in allowed_java]
-        for p in extra_java:
-            problems.append(
-                f"多出 Java 源文件 {_posix(p)} —— 代码实现必须单文件，"
-                f"只允许 {('、'.join(sorted(allowed_java))) or '入口文件'}，"
-                "实现差异靠同一个文件内部的写法体现"
-            )
-
-        # ── 4.4a 行数上限 ─────────────────────────────────────────
-        # `max_lines` 可被配置行设成 0 取消（彼时 java_max_lines=None）。
-        #
-        # 口径按**入口文件**（`profile.entry`，缺省为 Java 入口）而不是「所有 .java」：
-        # 行数上限要能跟着语言走 —— 非 Java 区没有 .java，只按 .java 过滤等于永不生效。
-        if profile.java_max_lines is not None:
-            # 检查「入口 + profile 允许的额外文件」：Java 下即 `<Xxx>Experiment.java`
-            # 与 `Screenshot.java`（与改造前逐字一致），非 Java 下即入口本身。
-            counted = allowed_java | ({_entry_name(mapping, profile)} - {None})
-            # `entry` 是**模式**（可含占位符、可写成 glob），不一定是字面文件名：
-            # 写 `entry` = `*.py` 时入口名解不出来，上面的集合就只剩 Screenshot.java，
-            # 行数上限被**静默**架空（实测 50 行文件、上限 3 行仍判 PASS）。
-            # 单个不含通配符的 `entry` 已经进 counted，这里只补「模式没落到任何实际文件」
-            # 的情况 —— 那等于入口文件缺失，按缺入口报，别让它悄悄跳过行数检查。
-            entry_tmpl = profile.entry or ("<Xxx>Experiment.java" if "Xxx" in mapping else "")
-            # 4.3 已经报过「入口改名」时不再报第二条 —— 同一个原因不说两遍
-            if entry_tmpl and not any("入口文件" in p for p in problems):
-                entry_expanded = _expand(_posix(entry_tmpl), mapping)
-                files = _actual_files(version_dir)
-                if any(ch in entry_expanded for ch in "*?["):
-                    # 模式：把匹配到的文件都算作入口。文档把 `entry` 写作 glob 是允许的,
-                    # 那就得按 glob 收口，「模式没落下任何文件」才算缺入口。
-                    matched = [p for p in files
-                               if fnmatch.fnmatch(p.name, Path(entry_expanded).name)]
-                    if not matched:
-                        problems.append(
-                            f"入口文件 `{entry_expanded}` 匹配不到任何文件（区文档 `entry` 指定）"
-                            "—— 行数上限只查入口，入口不在就无从生效"
-                        )
-                    counted |= {p.name for p in matched}
-                elif not any(p.name == Path(entry_expanded).name for p in files):
-                    problems.append(
-                        f"入口文件 {entry_expanded} 不存在（区文档 `entry` 指定）—— "
-                        "行数上限只查入口，入口不在就无从生效"
-                    )
-            for p in sorted(_actual_files(version_dir)):
-                if p.name not in counted:
-                    continue
-                n = _java_line_count(version_dir / p)
-                if n > profile.java_max_lines:
-                    problems.append(
-                        f"{_posix(p)} 有 {n} 行，超出上限 {profile.java_max_lines} 行"
-                        f"（按物理行计，含注释与空行）—— 精简实现，不是删注释硬凑"
-                    )
-
-        # ── 4.4b 交付源码里不得有横向对照的内部概念 ───────────────
-        for p in sorted(_actual_files(version_dir)):
-            if p.name not in allowed_java:
-                continue
+    # ── 4.4 交付源码里不得有横向对照的内部概念 ──────────────────
+    # 本 profile 是唯一一套规矩：源码范围 = `src/` 下全部文件（语言不限）。
+    # 单文件约束与行数上限已取消 —— 各版内部结构自定，规范不管「怎么写」。
+    if profile.java_forbidden_words or profile.java_forbidden_re \
+            or profile.java_header_command_check:
+        for p in sorted(_source_files(version_dir, profile)):
             text = (version_dir / p).read_text(encoding="utf-8", errors="replace")
             hits: list[str] = [w for w in profile.java_forbidden_words if w in text]
             if profile.java_forbidden_re is not None:
@@ -837,23 +615,6 @@ def audit_version(version_dir: Path, mapping: dict[str, str],
         hint = f"；{profile.stray_hint}" if profile.stray_hint else ""
         problems.append(f"多出顶层文件 {stray}（不在本 profile 的规范内{hint}）")
 
-    # ── 4.7 README.txt 必须是交付说明（仅单文件型）────────────────
-    # README 会被 _pack.py 逐字复制进提交包，但提交包里没有区根总结、也没有
-    # report/ 与 test/ —— 于是版本区里那些「完整文件清单 + 重跑步骤」到了提交包
-    # 就成了指向不存在文件的悬空引用，读者会以为少了文件。
-    if profile.readme_forbidden is not None:
-        readme = version_dir / "README.txt"
-        if readme.is_file():
-            text = readme.read_text(encoding="utf-8", errors="replace")
-            hits = [w for w in profile.readme_forbidden if w in text]
-            if hits:
-                problems.append(
-                    f"README.txt 里出现了开发侧的名字 {'、'.join(hits)} —— "
-                    "README 是**交付说明**，会被 _pack.py 逐字复制进区根 `提交/`，"
-                    f"而提交包里没有区根 {AREA_SUMMARY} 与 report/、test/。"
-                    f"删掉指向它们的句子（完整文件清单与重跑步骤属于区根 {AREA_SUMMARY}）"
-                )
-
     return problems
 
 
@@ -873,83 +634,6 @@ def audit_area_docs(area_root: Path) -> list[str]:
     return problems
 
 
-def audit_submission(area_root: Path, mapping: dict[str, str],
-                     versions: list[Path], profile: Profile) -> dict[str, list[str]]:
-    """审计区根 `提交/`：每个版本一个子目录，各自恰为 SUBMIT_FILES 那几个文件。
-
-    返回 {版本名: [问题...]}。`提交/` 不存在不算错（还没打包时本就不该有），
-    此时返回空 dict。只报错，不自动修正：多出来的文件也可能是别的东西，删不删由人判断。
-    """
-    submit = area_root / SUBMIT_DIR
-    if not submit.is_dir():
-        return {}
-
-    want = submit_file_names(mapping, profile)
-    result: dict[str, list[str]] = {}
-
-    # 提交包只该装版本名目录，别的顶层条目都是混进来的
-    known = {v.name for v in versions}
-    for p in sorted(submit.iterdir()):
-        if p.is_dir():
-            if p.name not in known:
-                result.setdefault(p.name, []).append(
-                    f"提交包目录名 {p.name}/ 不是版本名 —— `{SUBMIT_DIR}/` 下只该有 "
-                    f"{'、'.join(sorted(known))} 这样的版本名目录"
-                )
-            continue
-        if _is_ignored(Path(p.name)):
-            continue
-        result.setdefault(SUBMIT_DIR, []).append(
-            f"`{SUBMIT_DIR}/` 顶层不该有文件 {p.name} —— 交付物要放进 "
-            f"`{SUBMIT_DIR}/<版本名>/` 里（每个版本一个目录）"
-        )
-
-    for v in versions:
-        pkg = submit / v.name
-        if not pkg.is_dir():
-            # 修法指引只在真的允许 `_pack.py` 时给 —— 没列在 `required` 里的区，
-            # 「跑 python _pack.py」这句本身就是让人踩「多出顶层文件」FAIL 的坑。
-            how = (f"在本版目录下跑 python {PACKER_NAME} 生成"
-                   if _packer_permitted(profile, mapping)
-                   else f"按 `submit` 清单把文件挑进 {SUBMIT_DIR}/{v.name}/")
-            result.setdefault(v.name, []).append(
-                f"缺 {SUBMIT_DIR}/{v.name}/ —— {how}"
-            )
-            continue
-        problems = result.setdefault(v.name, [])
-        actual: set[str] = set()
-        for p in sorted(pkg.rglob("*")):
-            if not p.is_file():
-                continue
-            rel = p.relative_to(pkg)
-            if _is_ignored(rel):              # 截图/、*.class、~$* 等产物一律不算
-                continue
-            name = rel.as_posix()
-            actual.add(name)
-            if "/" in name:
-                problems.append(
-                    f"提交包里不该有子目录 {name} —— 提交包是平铺的 "
-                    f"{len(want)} 个文件，开发文件（report/、test/）不得混入"
-                )
-            elif name not in want:
-                problems.append(
-                    f"提交包里多出文件 {name}（不在交付清单内；"
-                    "提交包只放入口源程序、Screenshot.java、run_output.txt、README.txt、报告 docx）"
-                )
-        for name in want:
-            if name not in actual:
-                how = (f"在本版目录下跑 python {PACKER_NAME} 重新生成"
-                       if _packer_permitted(profile, mapping)
-                       else f"从版本目录里把它复制进 {SUBMIT_DIR}/{v.name}/")
-                problems.append(f"提交包缺文件 {name} —— {how}")
-
-    # 每个版本先占一个空列表位，好让问题按版本归组；这里把没问题的版本滤掉，
-    # 返回空 dict 才代表「全 PASS」（调用方就是按真假判断的）
-    return {name: problems for name, problems in result.items() if problems}
-
-
-SUBMIT_DIR = "提交"
-
 
 def find_versions(area_root: Path) -> list[Path]:
     """找出版本区里所有 `v数字` 形式的目录，按名字排序。"""
@@ -957,26 +641,6 @@ def find_versions(area_root: Path) -> list[Path]:
         return []
     return sorted(p for p in area_root.iterdir()
                   if p.is_dir() and re.fullmatch(r"v\d+", p.name))
-
-
-def _packer_permitted(profile: Profile, mapping: dict[str, str]) -> bool:
-    """本区的规范是否**允许**版本根存在 `_pack.py`。
-
-    规范节的提交段写着「跑 `python _pack.py`」（各版打包入口就在版本根），
-    但 `required` 一旦声明就只认列出的项：没列 `_pack.py` 的区，照这句放一个
-    `_pack.py` 会被 `_top_level_strays` 判成「多出顶层文件」—— 生成节与审计
-    自相矛盾，照文档做反而 FAIL。所以判定必须与审计**同源**，不能各写一套。
-
-    版本根放行什么，只看 `_allowed_root_names`（= `profile.spec` 展开后的顶层名）
-    加 `glob_required` —— 这正是 `_top_level_strays` 用的那两个集合，这里直接复用。
-
-    注意**不能**把 `profile.submit_files` 算进来：`submit` 管的是区根
-    `提交/<版本名>/` 里该有哪些文件，那里的 `_pack.py` 合法，并不代表版本根也能放它。
-    （`entry` 同理不算：它只是入口**名**，能不能落在版本根仍要 `required` 点头。）
-    """
-    if PACKER_NAME in _allowed_root_names(mapping, profile):
-        return True
-    return any(fnmatch.fnmatch(PACKER_NAME, g) for _, g in profile.glob_required)
 
 
 def _apply_config(profile: Profile, config: dict[str, str],
@@ -987,9 +651,9 @@ def _apply_config(profile: Profile, config: dict[str, str],
     零迁移的依据。只认 `CONFIG_KEYS` 里的键，未知键已被
     `_classify_config` 丢弃。
 
-    `required` / `submit` 用「声明即替换」语义：一旦在区文档里写了，就**只检查**
+    `required` 用「声明即替换」语义：一旦在区文档里写了，就**只检查**
     列出的那些文件，不在列的不再报「缺必需文件」。这是「核心 + 可配」的落点 ——
-    入口单文件与行数上限仍由 profile 核心约束着，产物清单则交给各区自定。
+    产物清单则交给各区自定。
 
     `mapping` 可选，只用于自洽性检查（见末尾）—— 不给就跳过那一条。
     """
@@ -998,24 +662,14 @@ def _apply_config(profile: Profile, config: dict[str, str],
 
     changes: dict[str, object] = {}
 
-    if "max_lines" in config:
-        raw = config["max_lines"].strip()
-        try:
-            n = int(raw)
-        except ValueError:
-            raise SystemExit(f"× `max_lines` 要是整数，得到 `{raw}`")
-        changes["java_max_lines"] = None if n <= 0 else n
-
     if "java_checks" in config:
         raw = config["java_checks"].strip().lower()
         if raw not in ("on", "off"):
             raise SystemExit(f"× `java_checks` 只能是 `on` 或 `off`，得到 `{raw}`")
-        off = raw == "off"
-        if off:
+        if raw == "off":
             changes["java_forbidden_words"] = ()
             changes["java_forbidden_re"] = None
             changes["java_header_command_check"] = False
-            changes["readme_forbidden"] = None
 
     if "entry" in config:
         changes["entry"] = config["entry"].strip()
@@ -1028,33 +682,12 @@ def _apply_config(profile: Profile, config: dict[str, str],
         changes["glob_required"] = ()
         notes.append(f"⚠ 区文档声明了 `required`，本次只检查这 {len(items)} 项")
 
-    if "submit" in config:
-        items = _split_config_list(config["submit"])
-        changes["submit_files"] = tuple((it, "") for it in items)
-        notes.append(
-            f"⚠ 区文档声明了 `submit`（{len(items)} 项）"
-            if items else "⚠ 区文档把 `submit` 声明为空，本区不生成提交包")
-
     result = dataclasses.replace(profile, **changes)
-
-    # ── 配置自洽性：声明了提交包，却不允许打包入口存在 ──────────────
-    # 规范节的提交段让人「cd 到版本目录跑 python _pack.py」，但 `required` 声明后
-    # 只认列出的项 —— `_pack.py` 不在列就会被判成「多出顶层文件」。生成节与审计
-    # 自相矛盾时，照文档做反而 FAIL，所以在这里点明，而不是静默改判。
-    # （只报不自动修正：`required` 是「声明即替换」，替人往清单里塞文件正是本次
-    #   要修的那类静默行为；且不改判 = 不改既有区的任何输出。）
-    if result.submit_files and mapping is not None \
-            and not _packer_permitted(result, mapping):
-        notes.append(
-            f"⚠ 区文档声明了 `submit`，但 `required` 里没有 `{PACKER_NAME}` —— "
-            f"规范节说「跑 python {PACKER_NAME}」，可真放了它会报「多出顶层文件」。"
-            f"把 `{PACKER_NAME}` 加进 `required`（或改用别的打包方式）")
 
     # ── 配置自洽性：`required` 替换了 spec，却没把入口文件列进去 ──────
     # `required` 是「声明即替换」：一旦写了，4.2 只查列出的项，入口不再计入必需。
-    # 而 4.4a 仍会按 `entry`（缺省 Java 约定）查入口是否存在 —— 于是入口缺失与否
-    # 取决于两处独立逻辑。若 `required` 没含入口名，入口就不受 4.2 保护，
-    # 行数上限也会随之静默失去落点。这里点明，不自动补（补就是替人写清单）。
+    # 若 `required` 没含入口名，入口就不受 4.2 保护 —— 这里点明，不自动补
+    # （补就是替人写清单）。
     if "required" in config and mapping is not None:
         entry = _entry_name(mapping, result)
         # `entry` 可写成 glob（如 `*.py`），那时没有单一入口名可查，跳过
@@ -1062,8 +695,7 @@ def _apply_config(profile: Profile, config: dict[str, str],
             if entry not in _allowed_root_names(mapping, result):
                 notes.append(
                     f"⚠ 区文档声明了 `required`，但清单里没有入口文件 `{entry}` —— "
-                    f"`required` 一旦声明就只查列出的项，入口会失去「缺必需文件」的保护，"
-                    f"行数上限也无从生效。把 `{entry}` 加进 `required`")
+                    f"`required` 一旦声明就只查列出的项，入口会失去「缺必需文件」的保护。把 `{entry}` 加进 `required`")
 
     return result
 
@@ -1100,8 +732,7 @@ def _resolve_profile(area_root: Path, explicit: str | None
     if doc_key is None:
         notes.append(
             f"⚠ 区文档里没有 `profile` 行，按默认 {DEFAULT_PROFILE} 审 —— "
-            f"若是快照区，请在 {AREA_SUMMARY} 里补一行 "
-            f"`` - `profile` = `source-snapshot` ``（或本次加 --profile source-snapshot）"
+            f"可在 {AREA_SUMMARY} 里补一行 `` - `profile` = `poly-version` ``"
         )
     if doc is not None and doc.name != AREA_SUMMARY:
         notes.append(
@@ -1111,7 +742,7 @@ def _resolve_profile(area_root: Path, explicit: str | None
     return _apply_config(profile, config, notes, mapping), mapping, notes
 
 
-def cmd_audit(area_root: Path, only: str | None, check_submit: bool,
+def cmd_audit(area_root: Path, only: str | None,
               explicit_profile: str | None) -> int:
     versions = find_versions(area_root)
     if not versions:
@@ -1130,10 +761,8 @@ def cmd_audit(area_root: Path, only: str | None, check_submit: bool,
     print(f"profile：{profile.title}（{profile.intro}）")
     if live:
         print("映射：" + "，".join(f"{k} → {v}" for k, v in live.items()))
-    elif profile.key == SNAPSHOT.key:
-        print("映射：本 profile 不需要映射行（版本根只锁 src/）")
     else:
-        print("映射：区文档里没有映射行，入口文件名按占位符模式跳过比对")
+        print("映射：区文档里没有映射行（本 profile 不靠映射行定位文件）")
     for dead in DEAD_MAPPING_KEYS:
         if dead in mapping:
             notes.append(
@@ -1164,32 +793,6 @@ def cmd_audit(area_root: Path, only: str | None, check_submit: bool,
         print("× 区根文档  FAIL")
         for p in doc_problems:
             print(f"    - {p}")
-
-    # ── 区根提交包（单独一块，与上面逐版本表分开显示）────────────────
-    if check_submit and _submit_files(profile):
-        print()
-        submit = area_root / SUBMIT_DIR
-        if not submit.is_dir():
-            # 同样按 `_packer_permitted` 分支：没声明 `_pack.py` 的区不该被告知去跑它
-            hint = (f"各版打包后，cd 到版本目录跑 python {PACKER_NAME}"
-                    if _packer_permitted(profile, mapping)
-                    else "各版按 `submit` 清单挑好文件后放进来")
-            print(f"– {SUBMIT_DIR}/  未生成（{hint}）")
-        else:
-            submit_problems = audit_submission(area_root, mapping, versions, profile)
-            total += 1
-            if not submit_problems:
-                print(f"√ {SUBMIT_DIR}/  PASS（{len(versions)} 个版本，"
-                      f"每份 {len(_submit_files(profile))} 个交付文件，无多余、无缺失）")
-            else:
-                failed += 1
-                print(f"× {SUBMIT_DIR}/  FAIL")
-                for name in sorted(submit_problems):
-                    for p in submit_problems[name]:
-                        print(f"    - {p}")
-    elif check_submit and not _submit_files(profile):
-        print()
-        print(f"– {SUBMIT_DIR}/  本 profile（{profile.title}）不生成提交包，跳过")
 
     print()
     if failed:
@@ -1364,56 +967,25 @@ def _footer_notes() -> list[str]:
         "",
     ]
 
-def build_single_file_section(area_name: str, mapping: dict[str, str],
-                              profile: Profile = SINGLE_FILE) -> str:
-    """single-file profile 的规范节。
+def build_poly_version_section(area_name: str, mapping: dict[str, str],
+                               profile: Profile = POLY_VERSION) -> str:
+    """poly-version profile 的规范节。
 
     `profile` 必须是**解析过配置行之后**的那份（`_apply_config` 的产物）——
-    生成节里的行数上限、必需清单、交付用词都得跟审计实际执行的规则一致。
-    拿模块常量 `SINGLE_FILE` 生成，区文档写了 `max_lines`/`entry`/`java_checks`
-    就会产出「生成节说 150 行、审计按 260 行放行」这种自相矛盾的文档。
-
-    缺省参数保留原常量，单独调用（旧外部脚本）行为不变。
+    生成节里的必需清单、交付用词都得跟审计实际执行的规则一致。
     """
     out: list[str] = _section_head(area_name, profile, mapping)
     out.extend(_mapping_block(mapping))
     out.extend(_required_tables(profile, mapping))
 
-    allowed_java = sorted(_allowed_java_names(mapping, profile))
-    entry = _entry_name(mapping, profile) or "<入口>"
-    # 入口可能已含在 allowed_java 里（Java 约定下 `<Xxx>Experiment.java` 就是其中之一），
-    # 去重后再列，免得写成「只允许出现入口 X 与 X、Screenshot.java」。
-    allowed_impl = sorted(set(allowed_java) | {entry} - {None})
-    out.append("**代码实现必须单文件**（硬性）")
+    src_dir = _expand("src", mapping)
+    out.append(f"**`{src_dir}/` 内部不受约束**（本 profile 的要点）")
     out.append("")
     out.append(
-        "整个版本目录里（含任何子目录）只允许出现这 %d 个实现文件：%s"
-        "。此外的实现源文件、或 `src/`、`java/` 这类源码目录，一律 FAIL。"
-        % (len(allowed_impl), "、".join(f"`{n}`" for n in allowed_impl))
+        f"版本根**只锁 `{src_dir}/` 这一项**：里面有几个子目录、几个源文件、怎么分包，"
+        "一律自定、审计不看。本规范只管「放在哪、叫什么」，不管「怎么写」。"
     )
     out.append("")
-    max_lines = profile.java_max_lines
-    if max_lines is None:
-        out.append("**行数上限：本区已关闭**（`max_lines` = `0`）")
-        out.append("")
-    else:
-        out.append("**每个实现源文件不得超过 %d 行**（硬性）" % max_lines)
-        out.append("")
-        out.append(
-            "口径是**物理行**（`wc -l` 的数），**注释与空行也占额度**。"
-            "注意已交付的实验一源程序是 170 行，**按此口径不达标** —— 本题的要求比实验一更严，"
-            "不要以实验一的写法为长度参照。"
-        )
-        out.append("")
-        out.append(
-            "「单文件」与「≤ %d 行」是一对约束：不许拆成几个文件，也不许写长。"
-            "两者共同逼出**同一文件内的组织差异**（内部类的用法、方法划分、命名、"
-            "参数化与否、注释密度），而不是靠代码规模拉开区别。"
-            "行数不够就精简实现，**不是把注释删掉硬凑**。"
-            "`report/` 下的 Python 层与 `Screenshot.java` 不受这两条限制。"
-            % max_lines
-        )
-        out.append("")
 
     out.append("**禁止**")
     out.append("")
@@ -1421,19 +993,13 @@ def build_single_file_section(area_name: str, mapping: dict[str, str],
         f"`{_expand(_posix(t), mapping)}`"
         for t, req, _ in profile.spec if req and "/" not in t
     )
-    # 编号动态排：`max_lines` 关掉时少一条，写死序号会跳号
+    # 编号动态排，改条目时不用同步序号
     rules: list[str] = [
         f"禁止改 {fixed} 这几个名字，也禁止把入口改名。"
         "「顶层不许多放文件」指源文件与改名 —— 上表列出的产物都是许可的。"
         if fixed else
         "禁止把入口改名。「顶层不许多放文件」指源文件与改名 —— 上表列出的产物都是许可的。",
-        f"禁止在这 {len(allowed_impl)} 个实现文件（{'、'.join(f'`{n}`' for n in allowed_impl)}）"
-        "之外新增任何实现源文件（含子目录内），"
-        "也禁止新建存放源码的目录 —— 代码实现必须单文件。",
     ]
-    if max_lines is not None:
-        rules.append("禁止实现源文件超过 %d 行（物理行，含注释与空行）。"
-                     "超了要精简实现，不是删注释凑数。" % max_lines)
     # 这两条只在区文档**声明了**对应产物时才写：`required` 一旦覆盖，
     # 未声明的产物就不在审计范围内，再列出来就是把规则指向不存在的文件，
     # 而「多出顶层文件」还会把它判成违规（见 `_top_level_strays`）。
@@ -1501,193 +1067,9 @@ def build_single_file_section(area_name: str, mapping: dict[str, str],
 
     out.extend(_doc_layer_block())
 
-    # ── 提交包（由 SUBMIT_FILES 派生，勿手抄到别处）──────────────────
-    # `submit` 可被配置行声明为空 —— 那时本区不生成提交包，规范节不该再画
-    # 一棵空树、说「每份 0 个文件一个不能少」。按 `_submit_files` 的实际结果生成。
-    files = _submit_files(profile)
-    if not files:
-        out.append("**区根「%s/」：本区不生成提交包**" % SUBMIT_DIR)
-        out.append("")
-        out.append(
-            f"区文档把 `submit` 声明为空（或本 profile 不生成），所以本区**不需要** "
-            f"`{SUBMIT_DIR}/`，审计也跳过这一块。交付物就留在各版版本目录里。"
-        )
-        out.append("")
-        out.extend(_footer_notes())
-        return "\n".join(out)
-
-    out.append("**区根「%s/」：每个版本一份提交包**" % SUBMIT_DIR)
-    out.append("")
-    out.append(
-        "各版要能以**各自独立的身份交出去**，所以每版都有自己完整的一份交付物。"
-        "把交付物从「多版并存、混着开发文件」的版本目录里拎出来放 `%s/<版本名>/`，"
-        "就是这个目录存在的理由 —— **包里不许混进任何开发文件**。" % SUBMIT_DIR
-    )
-    out.append("")
-    n = len(files)
-    out.append("```")
-    out.append(f"{area_name}/")
-    out.append(f"└── {SUBMIT_DIR}/")
-    out.append("    ├── v01/")
-    for i, (tmpl, _) in enumerate(files):
-        branch = "└──" if i == n - 1 else "├──"
-        out.append("    │   " + branch + " " + _expand(tmpl, mapping))
-    # 版本数不写死：本区有几个 vNN 就画几个（`find_versions` 是通用的，
-    # 生成器若写死 v01~v05，版本数不同的区会拿到一棵错的树）。
-    out.append(f"    ├── v02/    ← 同上 {n} 个文件，取自 v02")
-    out.append(f"    ├── v03/    ← 同上，取自 v03")
-    out.append("    └── …       ← 其余各版同理，每版一个目录、各含这 "
-               f"{n} 个文件，与其他版互不覆盖")
-    out.append("```")
-    out.append("")
-    out.append(
-        "**每份这 %d 个文件一个不能少、也不能多**，且 `%s/` 下的目录名必须恰好是版本名。"
-        % (n, SUBMIT_DIR)
-    )
-    out.append("")
-    for i, (tmpl, why) in enumerate(files, 1):
-        out.append("%d. `%s` —— %s" % (i, _expand(tmpl, mapping), why))
-    out.append("")
-    # 打包入口只有在**真的允许存在**时才能出现在生成的命令里：`required` 声明后
-    # 只认列出的项，没列 `_pack.py` 却让人「跑 python _pack.py」，照做就是一个
-    # 「多出顶层文件」的 FAIL。判定与审计同源（`_packer_permitted`），
-    # 所以生成节说的和审计判的永远一致。
-    packer_ok = _packer_permitted(profile, mapping)
-    if packer_ok:
-        out.append(
-            f"- 生成的命令：`cd <版本目录>` 然后 `python {PACKER_NAME}`。"
-            f"`{PACKER_NAME}` 只从**自己所在的版本目录**取文件，不关心当前工作目录 —— "
-            f"各版的 `{PACKER_NAME}` **逐字节相同**（跨版 `diff` 的锚点），"
-            "在哪个版本目录里跑，就产出 `%s/<该版本名>/`。" % SUBMIT_DIR
-        )
-    else:
-        out.append(
-            f"- 生成本版 `{SUBMIT_DIR}/<版本名>/` 的那一步——本区**禁用** `{PACKER_NAME}`："
-            f"它的名字不在 `required` 清单里，放进版本根会被判「多出顶层文件」。"
-            f"照 `submit` 那几项把文件挑进 `{SUBMIT_DIR}/<版本名>/`；"
-            f"要跑 `{PACKER_NAME}` 就把它加进 `required`。"
-        )
-    out.append(
-        "- **`%s/` 不存在不算错**（还没打包时本就不该有），"
-        "但一旦存在，每个版本目录的清单就要**严格**匹配，多一个少一个都 FAIL。"
-        "缺失的版本目录会被逐个报出来。" % SUBMIT_DIR
-    )
-    if packer_ok:
-        out.append(
-            f"- `{PACKER_NAME}` 只重建**自己那一版**的子目录，不动其它版本 —— "
-            "所以各版各跑一次即可，顺序无所谓，不存在互相覆盖的问题。"
-        )
-    if profile.readme_forbidden is not None:
-        out.append(
-            "- **`README.txt` 必须只描述提交包里这几个文件。** "
-            + (f"它由 `{PACKER_NAME}` 逐字复制，" if packer_ok else "它会进提交包，")
-            + f"而包里没有区根 `{AREA_SUMMARY}`、也没有 `report/` 与 `test/`；"
-            "在 README 里列这些名字，到了提交包就成了指向不存在文件的悬空引用。"
-            f"完整文件清单与「改完代码怎么重跑校验与报告」属于区根 `{AREA_SUMMARY}`。"
-        )
-    out.append("")
-    out.extend(_footer_notes())
-    out.append(
-        f"> **与实验报告技能的分工**：本节的 `{SUBMIT_DIR}/` 是**版本区内**的交付包。"
-        "仓库根的课程提交目录属于课程提交约定，归报告类技能管，"
-        "本脚本**只查版本区内的 "
-        f"`{SUBMIT_DIR}/`**，不去碰它。两处不要各写一套规则。"
-    )
-    out.append("")
-    return "\n".join(out)
-
-
-def build_snapshot_section(area_name: str, mapping: dict[str, str],
-                           profile: Profile = SNAPSHOT) -> str:
-    """source-snapshot profile 的规范节。
-
-    与 `build_single_file_section` 同理：`profile` 要是配置行解析后的那份。
-    """
-    out: list[str] = _section_head(area_name, profile, mapping)
-    out.extend(_mapping_block(mapping))
-
-    for dead in DEAD_MAPPING_KEYS:
-        if dead in mapping:
-            out.append(
-                "> 本区还留着 `` - `<" + dead + ">` = `" + mapping[dead] + "` `` 这一行 —— "
-                "`.iml` 已不再进版本区（见下），这行映射**已无意义，删掉即可**。"
-            )
-            out.append("")
-
-    out.extend(_required_tables(profile, mapping))
-
-    out.append("**`src/` 内部不受约束**（本 profile 的要点）")
-    out.append("")
-    out.append(
-        "快照型版本区**只锁 `src/` 这一项**：里面原有几个包、几个 `.java`、怎么分包，"
-        "一律照抄原项目、审计不看。原因很简单 —— 每版是既有项目的**完整源码快照**，"
-        "「实现必须单文件」在这里无意义，原项目本就是分包多文件。"
-        "本 profile 因此也**不设行数上限**：裁的是「放在哪、叫什么」，不是「写多长」。"
-    )
-    out.append("")
-    out.append("**版本区不收录 IDE 文件**（硬性）")
-    out.append("")
-    out.append(
-        "`.iml`（IntelliJ 模块描述）、`.iws`/`.ipr`（工作区配置）、`.idea/`（IDE 缓存）"
-        "**都不是版本产物**：它们是 IDE 在自己机器上的状态，每台机器都能重新生成，"
-        "也不是交给老师的东西。所以版本根不要求、也不检查它们（审计直接忽略）。"
-    )
-    out.append("")
-    out.append(
-        "> 需要编译或截图时，用原项目的模块或让 IDE 自己"
-        "认一下 source root 即可 —— 不必为此往 `vNN/` 里放一份 `.iml`。"
-        "同理，仓库根的 IDE 文件（`.idea/`、`.iml`）也不归本技能管。"
-    )
-    out.append("")
-    out.append("**版本根只该有 `src/`**（硬性）")
-    out.append("")
-    out.append(
-        "版本根除 `src/` 外不放手写文档、探针、报告或 IDE 文件；"
-        "对照用的文档属于区根 `" + AREA_SUMMARY + "`，编译产物与临时探针放仓库根的 `out/`。"
-    )
-    out.append("")
-    out.append("**本 profile 不做这几类检查**（不是放宽，是前提不成立）")
-    out.append("")
-    out.append(
-        "1. **单文件 / 行数上限**：快照本就多文件，且逐字复制自原分支 —— 无从「精简」。"
-    )
-    out.append(
-        "2. **交付源码用词检查**：快照**不许就地改**，所以「改掉违规用词」这个动作本身被禁止。"
-        "而且会误伤：「契约」在中文源码里是普通词（接口约定），不是本项目 `CONTRACT.md` "
-        "的简称专属；子串检查分不出这两种用法，快照型因此一律不跑它。"
-    )
-    out.append(
-        "3. **`README.txt` 检查**：本 profile 没有交付说明这个物件。"
-    )
-    out.append(
-        f"4. **区根 `{SUBMIT_DIR}/` 提交包**：那是单文件型的交付物，快照型不生成。"
-    )
-    out.append("")
-    out.append(
-        "> 这几条**只在 `single-file` profile 下生效**。所以换 profile 时，"
-        "审计结果会明显不同 —— 那不是「同一套规矩换了个说法」，是真的两套规矩。"
-    )
-    out.append("")
-
-    out.append("**禁止**")
-    out.append("")
-    out.append(
-        "1. 禁止改 `src/` 内的任何源码 —— 快照须与原分支逐字一致，"
-        "要改写法就回源区改、重新导出（就地编辑会让 `diff` 混入手工痕迹，对照可信度失效）。"
-    )
-    out.append(
-        "2. 禁止在版本根放 `src/` 之外的任何文件或目录（构建产物、探针、"
-        "手写文档、报告、IDE 文件都不算数）。"
-    )
-    out.append(
-        f"3. 禁止在版本目录里放任何 md —— 文档只有区根一份 `{AREA_SUMMARY}`。"
-    )
-    out.append("")
-
-    out.extend(_doc_layer_block())
-
     out.extend(_footer_notes())
     return "\n".join(out)
+
 
 
 def build_section(area_name: str, mapping: dict[str, str], profile: Profile) -> str:
@@ -1696,10 +1078,7 @@ def build_section(area_name: str, mapping: dict[str, str], profile: Profile) -> 
     `profile` 原样传给两个 builder —— 它必须是配置行解析后的那份，
     否则生成节会按 profile 缺省值写（如 150 行），与审计实际执行的规则对不上。
     """
-    if profile.key == SNAPSHOT.key:
-        body = build_snapshot_section(area_name, mapping, profile)
-    else:
-        body = build_single_file_section(area_name, mapping, profile)
+    body = build_poly_version_section(area_name, mapping, profile)
     return f"{body}\n{EMIT_FOOTER}"
 
 
@@ -1742,8 +1121,6 @@ def main(argv: list[str] | None = None) -> int:
                          "不给则读区文档里的 `profile` 行")
     ap.add_argument("--only", default=None,
                     help="只审计某一个版本，如 --only v03")
-    ap.add_argument("--no-submit", action="store_true",
-                    help="跳过区根 提交/ 的检查（还没打过包时用）")
     args = ap.parse_args(argv)
 
     _setup_stdout()
@@ -1754,18 +1131,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.emit_spec:
-        # `--only` / `--no-submit` 只对审计有意义。传了就明说被忽略，
+        # `--only` 只对审计有意义。传了就明说被忽略，
         # 不要静默吞掉 —— 静默会让人以为那面旗子起了作用。
-        dropped = [f for f, given in (("--only", args.only),
-                                      ("--no-submit", args.no_submit)) if given]
-        if dropped:
-            print(f"⚠ {'、'.join(dropped)} 对 --emit-spec 无意义，本次忽略")
+        if args.only:
+            print("⚠ --only 对 --emit-spec 无意义，本次忽略")
         profile, mapping, notes = _resolve_profile(area_root, args.profile)
         for n in notes:
             print(n)
         return cmd_emit(area_root, mapping, profile, args.out)
 
-    return cmd_audit(area_root, args.only, not args.no_submit, args.profile)
+    return cmd_audit(area_root, args.only, args.profile)
 
 
 if __name__ == "__main__":
