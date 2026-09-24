@@ -85,6 +85,14 @@ def main() -> int:
         v_old.mkdir(parents=True)
         assert C.source_root(v_old) == (v_old, False)
 
+        # JDK 版本解析：`javac -version` 的实际输出没有引号，且旧版是 1.8 形式。
+        # 解析错 → 版本闸形同虚设（比对永远拿到 None）。
+        assert C._feature_of("javac 21.0.11") == 21, C._feature_of("javac 21.0.11")
+        assert C._feature_of("javac 1.8.0_401") == 8, C._feature_of("javac 1.8.0_401")
+        assert C._feature_of('openjdk version "17.0.2" 2022-01-18') == 17
+        assert C._feature_of("javac 8") == 8
+        assert C._feature_of("没版本号") is None
+
         # 打包：源码与二进制资源都要在包里（只打 .java 的包跑不起来）。
         src_root = d / "packsrc"
         (src_root / "a").mkdir(parents=True)

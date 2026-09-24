@@ -105,6 +105,110 @@ def source_root(version_dir: Path) -> tuple[Path, bool]:
         return src, True
     return version_dir, False
 
+# ── JDK 选择 ────────────────────────────────────────────────────────
+#
+# 为什么必须先问 JDK 版本：`javac` 默认拿 PATH 上那个，而一台机器上常装好几个。
+# 跑错版本的后果是**静默的**：
+#   · 用高版本 JDK 编低版本目标的源码 → 编出来的 class 在目标机跑不了，
+#     而在本机一切正常，直到交上去才炸。
+#   · 用低版本编用了新语法的源码 → 报一堆看不懂的语法错误，看上去像源码有问题。
+# 所以编译前把版本问清楚，并用 `--release` 钉住，而不是靠 PATH 上碰巧是哪个。
+
+# javac 的版本行有两种写法：`javac 21.0.11`（现代）与 `javac 1.8.0_401`（旧）。
+# 都取主版本：21 / 8。别要求带引号 —— 实测输出里没有。
+def _feature_of(text: str) -> int | None:
+    """从 `javac 21.0.11` / `javac 1.8.0_401` 里取出主版本（21 / 8）。"""
+    m = re.search(r"(\d+)\.(\d+)", text)
+    if m:
+        major, minor = int(m.group(1)), int(m.group(2))
+        # 1.8 → 8；21.0 → 21。
+        return minor if major == 1 else major
+    m = re.search(r"\b(\d+)\b", text)
+    return int(m.group(1)) if m else None
+
+def probe_jdk(javac: str) -> tuple[str, int | None] | None:
+    """问 `javac -version` 拿到 (版本号原文, 主版本整数)。拿不到返回 None。"""
+    try:
+        proc = subprocess.run([javac, "-version"], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    blob = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    if not blob:
+        return None
+    return blob.split("\n")[0], _feature_of(blob)
+
+def resolve_jdk(args, javac: str, java: str) -> tuple[str, str, int | None, list[str]]:
+    """确定用哪个 JDK 编译/运行。返回 (javac, java, release 主版本或 None, 提示行)。
+
+    优先级：`--jdk` > `--javac`/`--java` 显式指定 > 交互式提问（仅 TTY）> PATH。
+    **非交互（管道/CI）不提问**，否则脚本会卡在等输入上。
+    """
+    notes: list[str] = []
+
+    if args.jdk:
+        home = Path(args.jdk)
+        if not home.is_dir():
+            raise SystemExit(f"× --jdk 指向的不是目录：{_posix(home)}")
+        javac = str(home / "bin" / ("javac.exe" if os.name == "nt" else "javac"))
+        java = str(home / "bin" / ("java.exe" if os.name == "nt" else "java"))
+        notes.append(f"JDK 由 --jdk 指定：{_posix(home)}")
+    elif args.javac != "javac" or args.java != "java":
+        notes.append(f"JDK 由 --javac/--java 指定：{javac} / {java}")
+    elif args.jdk_version:
+        notes.append(f"JDK 由 --jdk-version {args.jdk_version} 指定")
+    elif sys.stdin.isatty() and not args.no_prompt:
+        # 探测 PATH 上那个，把结果当默认值给用户确认。
+        probe = probe_jdk(javac)
+        default = str(probe[1]) if probe else ""
+        shown = probe[0] if probe else "未检测到 javac"
+        prompt = f"用哪个 JDK 编译/运行？（当前 PATH 上：{shown}）"
+        if default:
+            prompt += f"［回车 = {default}］"
+        prompt += "："
+        try:
+            ans = input(prompt).strip()
+        except EOFError:
+            # EOF（stdin 是管道、没人答）不该当成取消：用探测到的默认值继续。
+            print()
+            ans = default
+        except KeyboardInterrupt:
+            # Ctrl+C 是人主动要停，那就真停。
+            print()
+            raise SystemExit("× 已取消")
+        if not ans:
+            ans = default
+        if not ans:
+            raise SystemExit(
+                "× 没拿到 JDK 版本，PATH 上也没有 javac。"
+                "用 --jdk <JDK_HOME> 指定，或先装 JDK。")
+        args.jdk_version = ans
+    else:
+        notes.append("非交互模式：JDK 用 PATH 上的 javac/java（要钉版本请传 --jdk 或 --jdk-version）")
+
+    release = None
+    if args.jdk_version:
+        m = re.fullmatch(r"(?:1\.)?(\d+)", args.jdk_version.strip())
+        if not m:
+            raise SystemExit(f"× 认不出 JDK 版本：{args.jdk_version}（要的是主版本号，如 21）")
+        release = int(m.group(1))
+
+    # 钉住的版本与实际编译器不一致时报警：`--release 21` 用 JDK 17 编不出来。
+    probe = probe_jdk(javac)
+    if probe is None:
+        notes.append(f"⚠ 跑不了 `{javac} -version`，无法核对版本")
+    else:
+        actual = probe[1]
+        if release is not None and actual is not None and release > actual:
+            raise SystemExit(
+                f"× 指定的 JDK {release} 高于实际编译器 {actual}（{probe[0]}）。"
+                f"换 --jdk <JDK_HOME> 指向装了 JDK {release} 的目录。")
+        notes.append(f"实际编译器：{probe[0]}")
+        if release is not None:
+            notes.append(f"目标版本：--release {release}")
+
+    return javac, java, release, notes
+
 # ── 程序类型判定 ─────────────────────────────────────────────────────
 
 GUI_MARKERS = ("javax.swing", "java.awt.Graphics", "extends JFrame", "extends JPanel")
@@ -139,7 +243,7 @@ def find_main_class(java_files: list[Path]) -> str | None:
 # ── 编译 ─────────────────────────────────────────────────────────────
 
 def compile_version(src_root: Path, out_dir: Path, extra_src: Path | None,
-                    javac: str) -> list[str]:
+                    javac: str, release: int | None = None) -> list[str]:
     """整套编译到本版专属 out。绝不只编入口。"""
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -148,6 +252,9 @@ def compile_version(src_root: Path, out_dir: Path, extra_src: Path | None,
     files = [str(p) for p in _java_files(src_root)]
     cmd = [javac, "-encoding", "UTF-8", "-implicit:none",
            "-sourcepath", str(src_root)]
+    if release is not None:
+        # 钉住目标版本："1.8" 与 "8" 是同一个意思，javac 两种都收。
+        cmd += ["--release", str(release)]
     if extra_src is not None:
         # 辅助类另编一份，只加 classpath，不进 -sourcepath（否则会被当源码打包）
         cmd += ["-cp", str(extra_src)]
@@ -218,7 +325,7 @@ public final class ScreenshotHelper {
 }
 '''
 
-def ensure_helper(out_root: Path, javac: str) -> Path:
+def ensure_helper(out_root: Path, javac: str, release: int | None = None) -> Path:
     """把 ScreenshotHelper 编到 out_root/_helper/，返回该目录。已存在则复用。"""
     helper_dir = out_root / "_helper"
     marker = helper_dir / "ScreenshotHelper.class"
@@ -227,8 +334,12 @@ def ensure_helper(out_root: Path, javac: str) -> Path:
     helper_dir.mkdir(parents=True, exist_ok=True)
     src = helper_dir / "ScreenshotHelper.java"
     src.write_text(SCREENSHOT_HELPER_SRC, encoding="utf-8")
-    proc = subprocess.run([javac, "-encoding", "UTF-8", "-d", str(helper_dir), str(src)],
-                          capture_output=True, text=True, errors="replace")
+    cmd = [javac, "-encoding", "UTF-8"]
+    if release is not None:
+        # 辅助类必须与主代码同目标版本：编成高版本会让低版 JRE 连截图都跑不起来。
+        cmd += ["--release", str(release)]
+    cmd += ["-d", str(helper_dir), str(src)]
+    proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     if proc.returncode != 0:
         raise SystemExit("× 截图辅助类编译失败：\n" + (proc.stderr or proc.stdout))
     return helper_dir
@@ -329,7 +440,7 @@ def pack_src_zip(src_root: Path, zip_path: Path, keep_root_name: str) -> None:
             zf.writestr(f"{keep_root_name}/.keep", "")
 
 def run_check_code(repo_root: Path, area: Path, checks_script: Path | None,
-                   python: str, out_root: Path) -> list[str]:
+                   python: str, out_root: Path, javac: str) -> list[str]:
     """跑 poly-version-generator 的 check_code.py（存在才跑）。
 
     **给每个版本区一个专属 out 根**（`out/check-<项目>-<区名>/`）：
@@ -341,7 +452,7 @@ def run_check_code(repo_root: Path, area: Path, checks_script: Path | None,
         return []
     area_out = out_root / f"check-{area.parent.name}-{area.name}"
     proc = subprocess.run([python, str(checks_script), str(area),
-                           "--out-root", str(area_out)],
+                           "--out-root", str(area_out), "--javac", javac],
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace")
     if proc.returncode != 0:
@@ -352,7 +463,7 @@ def run_check_code(repo_root: Path, area: Path, checks_script: Path | None,
 
 def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
                  javac: str, java: str, python: str, checks_script: Path | None,
-                 skip_check: bool, dry_run: bool) -> list[str]:
+                 skip_check: bool, dry_run: bool, release: int | None = None) -> list[str]:
     proj = area.parent.name
     area_name = area.name
     problems: list[str] = []
@@ -362,7 +473,7 @@ def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
         return [f"{_posix(area.relative_to(repo_root))} 下没有 vNN 版本目录"]
 
     if not skip_check and not dry_run:
-        problems += run_check_code(repo_root, area, checks_script, python, out_root)
+        problems += run_check_code(repo_root, area, checks_script, python, out_root, javac)
         if problems:
             return problems
 
@@ -371,7 +482,7 @@ def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
         shutil.rmtree(stage)
     stage.mkdir(parents=True, exist_ok=True)
 
-    helper_dir = ensure_helper(out_root, javac) if not dry_run else out_root / "_helper"
+    helper_dir = ensure_helper(out_root, javac, release) if not dry_run else out_root / "_helper"
 
     for v in versions:
         src_root, has_src = source_root(v)
@@ -393,7 +504,7 @@ def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
             continue
 
         out_dir = out_root / f"shot-{proj}-{area_name}-{v.name}"
-        errs = compile_version(src_root, out_dir, helper_dir if gui else None, javac)
+        errs = compile_version(src_root, out_dir, helper_dir if gui else None, javac, release)
         if errs:
             problems += [f"{v.name}：{e}" for e in errs]
             continue
@@ -467,6 +578,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--javac", default="javac")
     ap.add_argument("--java", default="java")
     ap.add_argument("--python", default=sys.executable)
+    ap.add_argument("--jdk", default=None,
+                    help="JDK_HOME 目录（含 bin/javac）。指定后不再提问，优先于 --javac/--java")
+    ap.add_argument("--jdk-version", default=None,
+                    help="目标主版本号，如 21；传给 javac 的 --release，并校验不高于实际编译器")
+    ap.add_argument("--no-prompt", action="store_true",
+                    help="即使交互也不提问 JDK 版本（脚本/CI 用）")
     args = ap.parse_args(argv)
 
     _setup_stdout()
@@ -508,8 +625,13 @@ def main(argv: list[str] | None = None) -> int:
             checks = None
 
     print(f"仓库：{_posix(repo_root)}")
+    # JDK 选择必须在跑 check_code.py 之前定下来：它也带一套 javac，
+    # 两边用不同版本会出现「检查过了、正式编译却失败」这种自相矛盾的结果。
+    javac, java, release, jdk_notes = resolve_jdk(args, args.javac, args.java)
     print(f"提交目录：{_posix(sub_root)}/")
     print(f"编译输出：{_posix(out_root)}/（每版独立目录，绝不复用）")
+    for n in jdk_notes:
+        print(f"JDK：{n}")
     print(f"前置检查：{'check_code.py' if checks and not args.skip_check else '跳过'}")
     print(f"版本区：{len(areas)} 个" + ("（dry-run）" if args.dry_run else ""))
     print()
@@ -519,8 +641,8 @@ def main(argv: list[str] | None = None) -> int:
         rel = _posix(area.relative_to(repo_root)) if area.is_relative_to(repo_root) else _posix(area)
         print(f"== {rel}")
         problems = process_area(repo_root, area, sub_root, out_root,
-                               args.javac, args.java, args.python, checks,
-                               args.skip_check, args.dry_run)
+                               javac, java, args.python, checks,
+                               args.skip_check, args.dry_run, release)
         if problems:
             failed += 1
             print(f"  × FAIL")

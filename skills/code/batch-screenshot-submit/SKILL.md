@@ -38,6 +38,11 @@ python $S <仓库根> --dry-run                        # 只列计划，不编�
 
 对每个版本区的每个 `vNN`，依次做：
 
+0. **确认 JDK 版本**（交互式跑时会先问）。理由：`javac` 默认拿 PATH 上那个，
+   而一台机器常装好几个。用错版本是**静默失败**：高版本 JDK 编低版本目标的源码，
+   本机一切正常、到目标机才 `UnsupportedClassVersionError`。
+   版本定下后用 `javac --release N` 钉住，并把同一个 `javac` 传给 `check_code.py`，
+   保证前置检查与正式编译用同一个编译器。
 1. **前置检查**：跑 `poly-version-generator/scripts/check_code.py`。
    编译不过、同类名冲突、out 被污染 → **整体中止**，不产出半个提交包。
    检查用**每区专属的 out 根**（`out/check-<项目>-<区名>/`）：`check_code.py`
@@ -86,7 +91,8 @@ python $S <仓库根> --dry-run                        # 只列计划，不编�
 
 ## 前置条件
 
-- **JDK**（`javac`/`java` 在 PATH 上）。无 JDK 时编译一步会直接失败。
+- **JDK**（`javac`/`java` 在 PATH 上，或用 `--jdk <JDK_HOME>` 指定）。
+  无 JDK 时编译一步会直接失败；交互式跑时会先问用哪个版本。
 - **Python 包 `PIL`**（Pillow）：渲染控制台图与校验非空白都要它。
   `python -m pip install pillow`。
 - **有可用桌面的环境**（GUI 截图用 `java.awt.Robot`）。无桌面会报
@@ -102,9 +108,25 @@ python $S <仓库根> --dry-run                        # 只列计划，不编�
 | `--area <相对路径>` | 只处理指定版本区，可重复 |
 | `--dry-run` | 只列「每版是什么类型、入口类、文件数」，不编译不截图 |
 | `--skip-check` | 跳过 `check_code.py` 前置检查（布局债未清时的逃生口） |
+| `--jdk <JDK_HOME>` | 指定 JDK 目录（含 `bin/javac`）。优先于 PATH，指定后不再提问 |
+| `--jdk-version N` | 目标主版本号（如 `21`），传给 `--release`；高于实际编译器时直接报错 |
+| `--no-prompt` | 即使交互也不提问 JDK（脚本/CI 用） |
+| `--javac` / `--java` | 分别指定编译器/执行器路径 |
 | `--out-root` | 编译输出根，默认 `<仓库根>/out` |
 | `--submission-root` | 提交目录根，默认 `<仓库根>/提交` |
-| `--java` / `--javac` / `--python` | 指定可执行文件 |
+| `--python` | 指定 python（跑 `check_code.py` 用） |
+
+### JDK 版本是怎么定的
+
+优先级：`--jdk` > `--javac`/`--java` 显式指定 > **交互式提问**（仅当 stdin 是终端）> PATH。
+
+提问时会把 PATH 上探测到的版本当默认值（回车即采用），并把目标版本用 `--release N`
+钉住。**非交互（管道、CI）不会提问** —— 否则脚本会卡在等输入上；此时走到 PATH 分支。
+
+想脚本化又不想靠 PATH 的话，用 `--jdk-version N` 或 `--jdk <JDK_HOME>`。
+
+> 要装多个 JDK、按需切换时，`--jdk <JDK_HOME>` 最可靠：它直接指到目录，
+> 不依赖 PATH 当前指向哪个。
 
 ## 失败时怎么读输出
 

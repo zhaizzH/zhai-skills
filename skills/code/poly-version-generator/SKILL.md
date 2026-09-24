@@ -126,6 +126,11 @@ python $C <版本区> --only v03      # 只查一个
 `import`、整套编译（`javac $(find src -name '*.java')`，绝不只编入口）、
 `out/` 是否被污染。编译输出固定到 `out/<版本名>/`，**每版一个独立目录**。
 
+`--out-root <目录>` 换编译输出根（默认 `<版本区>/out`）；`--javac <路径>` 换编译器。
+两个选项都是给调用方钩子：被 `batch-screenshot-submit` 调时，它会传**每区专属的
+out 根**（避免各区版本名都是 `v01`…`v05` 而互相误判）和**已定好的 JDK**。
+自带跑不用传这两项。
+
 结果写进各版 `vNN/check_code.txt`（首行 `√`/`×`）。**布局审计（下一步）读它当门。**
 退出码 0 = 全 PASS，1 = 有版本 FAIL。
 
@@ -138,7 +143,6 @@ A=poly-version-generator/scripts/audit_layout.py
 python $A <版本区>
 python $A <版本区> --only v03             # 只审一个
 ```
-
 退出码 0 = 全 PASS，1 = 有版本 FAIL。输出是逐版本的 PASS/FAIL 表，
 样例见 [`references/troubleshooting.md`](references/troubleshooting.md) 开头。
 
