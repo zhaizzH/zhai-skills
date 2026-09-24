@@ -46,6 +46,16 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+def build_run_contract(area_name: str) -> str:
+    """转发到 check_code.py —— 编译/运行约定的真源在那里。
+
+    不在本文件里重写一份：两处规则必然漂，而「每版独立 out」的表述与
+    check_code.py 实际执行的检查必须逐字一致。
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import check_code
+    return check_code.build_run_contract(area_name)
+
 
 def _setup_stdout() -> None:
     """让 stdout 在非 UTF-8 控制台（Windows GBK 是常态）下**不要抛异常**。
@@ -149,8 +159,10 @@ PROFILE_RE = CONFIG_RE
 # `CONFIG_RE` 一次只收一对反引号，故 `_classify_config` 按出现次序合并同名清单键 ——
 # 先转 dict 会静默丢掉第二项。只有清单键合并，其余键仍取末值。
 #   java_checks `on`/`off`：交付用词与「头部编译运行命令」检查。
+#   code_checks `on`/`off`：编译与类路径卫生检查（由 scripts/check_code.py 执行）。
+#                           `off` 时审计不再要求 check_code.py 全 PASS。
 CONFIG_KEYS: tuple[str, ...] = (
-    "entry", "required", "java_checks",
+    "entry", "required", "java_checks", "code_checks",
 )
 
 # 其中「值是逗号分隔清单」的键。它们的自然写法是**每个值各自加一对反引号**：
@@ -216,6 +228,7 @@ IGNORE_GLOBS: list[str] = [
     "*.py[cod]",                            # Python 字节码
     "~$*", ".~*", "*~", "*.swp", "*.swo",   # Office 锁文件 / 编辑器临时文件
     "*.log", "*.tmp", "*.bak",              # 日志与临时文件（与 .gitignore 同步）
+    "check_code.txt",                      # check_code.py 的检查报告（审计 4.7 读它）
     "Desktop.ini", "Thumbs.db",
 ]
 
@@ -246,6 +259,8 @@ class Profile:
     java_forbidden_words: tuple[str, ...] = ()
     java_forbidden_re: re.Pattern[str] | None = None
     java_header_command_check: bool = False
+    # 是否要求 scripts/check_code.py 全 PASS（编译与类路径卫生）
+    code_checks: bool = True
     # 版本根允许出现、但不写进 SPEC 的文件后缀
     allowed_root_suffixes: frozenset[str] = frozenset()
     # 「多出顶层文件」的提示语
@@ -615,6 +630,30 @@ def audit_version(version_dir: Path, mapping: dict[str, str],
         hint = f"；{profile.stray_hint}" if profile.stray_hint else ""
         problems.append(f"多出顶层文件 {stray}（不在本 profile 的规范内{hint}）")
 
+    # ── 4.7 代码检查门 ──────────────────────────────────────────
+    # 编译不通过、同类名冲突、out 被兄弟版本污染 —— 这些**不是布局问题**
+    # （`src/` 内部本就不管），所以布局审计不能直接判。判据落在产物上：
+    # `check_code.py` 跑过之后写下的 `check_code.txt`。文件在且首行 `√` = 通过。
+    #
+    # 为何不在这里现场调 javac：审计要能在无 JDK 的机器上跑（布局检查不该依赖工具链）。
+    # 所以是「先跑 check_code.py，再跑审计」，审计只验它的结论。
+    if profile.code_checks:
+        report = version_dir / "check_code.txt"
+        if not (version_dir / "src").is_dir():
+            pass                          # 4.2 已报缺 src/，不再重复
+        elif not report.is_file():
+            problems.append(
+                "缺 check_code.txt —— 先跑 `python poly-version-generator/scripts/"
+                "check_code.py <版本区>`，全部 PASS 后再审计（编译不通过不得进入下一步）"
+            )
+        else:
+            first = report.read_text(encoding="utf-8", errors="replace").split("\n")[0].strip()
+            if not first.startswith("√"):
+                problems.append(
+                    f"check_code.txt 显示代码检查未通过（首行：{first or '空'}）—— "
+                    "修到 check_code.py 全 PASS 再重跑"
+                )
+
     return problems
 
 
@@ -670,6 +709,12 @@ def _apply_config(profile: Profile, config: dict[str, str],
             changes["java_forbidden_words"] = ()
             changes["java_forbidden_re"] = None
             changes["java_header_command_check"] = False
+
+    if "code_checks" in config:
+        raw = config["code_checks"].strip().lower()
+        if raw not in ("on", "off"):
+            raise SystemExit(f"× `code_checks` 只能是 `on` 或 `off`，得到 `{raw}`")
+        changes["code_checks"] = (raw == "on")
 
     if "entry" in config:
         changes["entry"] = config["entry"].strip()
@@ -1066,6 +1111,12 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
         out.append("")
 
     out.extend(_doc_layer_block())
+
+    # ── 编译与运行约定（唯一真源在 check_code.py，勿手抄到别处）──
+    if profile.code_checks:
+        out.append("## 二、编译与运行（硬性）")
+        out.append("")
+        out.append(build_run_contract(area_name=area_name))
 
     out.extend(_footer_notes())
     return "\n".join(out)

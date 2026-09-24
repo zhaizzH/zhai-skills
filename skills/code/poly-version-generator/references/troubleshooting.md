@@ -35,3 +35,9 @@ profile：poly-version（同一目标整体结构相同、内部细节各异的�
 | 改完树，`项目总结.md` 与审计结果不一致 | 树只该在脚本里改一次，然后重跑 `--emit-spec` 覆盖第一节。不要手改生成节 |
 | 审计输出里的标记显示成 `?`（如 `? v01 FAIL`） | GBK 控制台编不出 `⚠`/`√`。审计器已把「异常退出」降级为「个别字符替换」，**结论照样是完整跑完的**；想让标记完整显示就加 `PYTHONIOENCODING=utf-8`，或直接 `-o` 写文件 |
 | 区文档里写了 `profile` 行但被命令行覆盖 | 命令行 `--profile` 优先，审计器会打印一句提示。删掉命令行参数即按文档走 |
+| 审计报「缺 `check_code.txt`」 | 先跑 `python poly-version-generator/scripts/check_code.py <版本区>`。审计 4.7 读它当门：文件不在 = 代码检查没跑过，不得进入下一步 |
+| 审计报「`check_code.txt` 显示代码检查未通过」 | 看 `vNN/check_code.txt` 里的条目；修完重跑 `check_code.py`（它会覆写这个文件），全 PASS 后再审计 |
+| `java Main` 报 `找不到主类` / `NoClassDefFoundError` | `-cp`/`cwd` 错：确认 out 目录是本版专属（`out/vNN`），别指向别的版本的 out |
+| `javac` 报 `cannot find symbol` | 只编了入口。改用整套编译：`javac -d ../out/vNN $(find src -name '*.java')` |
+| 无报错但行为错 | 选中了兄弟版本的 `model`/`Main`。给各版用唯一顶层包根（`v01` 用 `planwar.*`），并加 `-implicit:none` 断掉隐式编译 |
+| 审计报「版本目录里有 out/」 | 构建产物不属于版本产物。放到仓库根，每版一个独立目录（`out/<版本名>`） |
