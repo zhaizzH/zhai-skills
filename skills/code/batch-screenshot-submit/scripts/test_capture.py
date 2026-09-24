@@ -10,6 +10,7 @@
   · 字体字形判定：缺 CJK 字形的字体会被识别出来，纯 ASCII 输出不受影响
   · 程序类型判定：Swing 源码判 GUI，纯控制台判非 GUI
   · 源根识别：有 `src/` 用 `src/`，旧布局退回版本根
+  · 题号读取：区文档里的 `slot` 行能读出来，缺行/空值/带路径分隔符都要报错
   · zip 打包：源码与二进制资源都在包里，且路径前缀是 `src/`
 
 退出码 0 = 全通过；1 = 有断言失败（脚本有问题，不是被检对象有问题）。
@@ -153,6 +154,45 @@ def main() -> int:
         C.pack_src_zip(src_root, zp, "src")
         names = set(zipfile.ZipFile(zp).namelist())
         assert names == {"src/a/Main.java", "src/img/h.png"}, names
+
+        # ── 题号读取 ──────────────────────────────────────────────────
+        # 题号是产物**目录名**，读错就把包放到错位置，而且外观完全正常。
+        area = d / "areadoc"
+        area.mkdir()
+
+        # 没区文档 → 必须报错，不能默认成 1（默认就把「没配」当成「第一题」）。
+        slot, doc, why = C.read_slot(area)
+        assert slot is None and why, "没有区文档时必须给出原因"
+
+        doc_path = area / "项目总结.md"
+        doc_path.write_text("# 标题\n\n正文\n", encoding="utf-8")
+        slot, doc, why = C.read_slot(area)
+        assert slot is None and "slot" in why, why
+
+        # 列表符号与引用块前缀都要认（配置行常写在 `>` 提示块里）。
+        doc_path.write_text("# 标题\n\n> - `slot` = `2`\n", encoding="utf-8")
+        assert C.read_slot(area)[0] == "2", C.read_slot(area)
+
+        doc_path.write_text("# 标题\n\n- `slot` = `3`\n", encoding="utf-8")
+        assert C.read_slot(area)[0] == "3"
+
+        # 行内夹在散文里的 `` `slot` = `1` `` 不算配置 —— 否则正文提一句就改掉落点。
+        doc_path.write_text("# 标题\n\n本区 `slot` = `1` 是题号。\n", encoding="utf-8")
+        assert C.read_slot(area)[0] is None, "非独立成行的 slot 不该被读成配置"
+
+        # 空值 = 没配，必须报错而不是当空目录名。
+        doc_path.write_text("# 标题\n\n- `slot` = ``\n", encoding="utf-8")
+        assert C.read_slot(area)[0] is None, "空题号必须报错"
+
+        # 带路径分隔符的值会把产物写到提交树外面，必须拦。
+        doc_path.write_text("# 标题\n\n- `slot` = `../坏`\n", encoding="utf-8")
+        assert C.read_slot(area)[0] is None, "含路径分隔符的题号必须拦下"
+        doc_path.write_text("# 标题\n\n- `slot` = `a/b`\n", encoding="utf-8")
+        assert C.read_slot(area)[0] is None, "含 / 的题号必须拦下"
+
+        # 转置范围：只对登记过的项目开启。
+        assert C.is_transposed("04-FactoryPattern")
+        assert not C.is_transposed("02-SingletonPattern")
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

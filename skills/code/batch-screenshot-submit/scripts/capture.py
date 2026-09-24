@@ -17,13 +17,14 @@
   1. 识别源根：优先 `vNN/src/`；没有则退回 `vNN/`（旧布局如 poly-singleton-demo）。
   2. 编译到 `<仓库根>/out/shot-<项目>-<区名>-<版本>/`（**每版一个独立 out**，
      绝不复用；与 poly-version-generator 的约定一致）。
+     转置布局的项目还要求区文档声明 `slot`（题号），缺了直接 FAIL。
   3. 运行并截图：
      · 控制台程序（源文件里无 javax.swing/java.awt）—— 捕获 stdout，用 PIL 渲染成图。
      · GUI 程序（Swing）—— 注入 `ScreenshotHelper`（编译到独立目录、**不写进 src/**），
        反射调用原 `main`，等窗口出现后 `Robot` 截窗口区域，截完退出。
   4. 校验截图不是纯色/空白（均值与方差阈值）。空白 = 该版 FAIL，整体中止。
-  5. 打包 `src/**` 成 zip（含 img/ 等资源），与截图一起放进
-     `<仓库根>/提交/<项目>/<区名>/`。
+  5. 打包 `src/**` 成 zip（含 img/ 等资源），与截图一起放进 `<仓库根>/提交/`。
+     摆法有两种，见下节「提交布局」。
 
 # 为什么这么设计
 
@@ -48,6 +49,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 # ── 可调常量 ─────────────────────────────────────────────────────────
@@ -85,6 +87,32 @@ BLANK_STDDEV_THRESHOLD = 3.0
 
 SUBMISSION_DIR = "提交"
 
+# ── 提交布局 ─────────────────────────────────────────────────────────
+#
+# 两种摆法：
+#
+#   默认（按区）    提交/<项目>/<区名>/vNN-src.zip + vNN.png
+#   转置（按版本）  提交/<项目>/vNN/<题号>/src.zip + screenshot.png
+#
+# 转置把「区」与「版本」两个维度对调：一个 vNN 目录下横排该项目的各个题目，
+# 于是「同一版的三道题」聚在一起，按版本上交时不用在几个区目录之间来回找。
+# 它的前提是项目里**多个区属于同一批题目的不同题**，所以只对这类项目开启，
+# 且每个区必须自报题号 —— 题号决定目录名，猜不得。
+TRANSPOSED_PROJECTS: tuple[str, ...] = ("04-FactoryPattern",)
+# 题号在区文档里的键名（`- `slot` = `1``）。
+SLOT_KEY = "slot"
+# 区文档候选名，与 poly-version-generator 的 AREA_DOC_CANDIDATES 一致：
+# 优先 `项目总结.md`，过渡期退回 `CONTRACT.md`。
+AREA_DOC_CANDIDATES = ("项目总结.md", "CONTRACT.md")
+# 题号行。列表符号、引用块前缀都可省（配置行常写在 `>` 提示块里），
+# 但**必须整行只有这一条配置**：否则正文里偶然写到的 `` `slot` = `…` ``
+# 会被当成配置，静默改掉产物落点。
+SLOT_RE = re.compile(
+    r"^[ \t]*(?:>[ \t]*)*(?:[-*][ \t]+)?`" + SLOT_KEY + r"`[ \t]*[:=][ \t]*`([^`]*)`[ \t]*$",
+    re.M)
+# 题号要当目录名，只收安全字符：`/` 或 `..` 会把产物写到提交树外面去。
+SLOT_NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
+
 def _setup_stdout() -> None:
     try:
         sys.stdout.reconfigure(errors="replace")
@@ -93,6 +121,17 @@ def _setup_stdout() -> None:
 
 def _posix(p: str | Path) -> str:
     return Path(p).as_posix()
+
+def _rel(repo_root: Path, p: Path) -> str:
+    """尽量显示成相对仓库根的路径；不在仓库内就显示绝对路径。
+
+    `--submission-root` / `--out-root` 可以指到仓库外面，此时 `relative_to`
+    会抛 `ValueError` —— 一个显示用的路径不该让整轮跑挂掉。
+    """
+    try:
+        return _posix(p.relative_to(repo_root))
+    except ValueError:
+        return _posix(p)
 
 def release_flags(release: int | None) -> list[str]:
     """把目标主版本翻译成 javac 参数。
@@ -108,6 +147,16 @@ def release_flags(release: int | None) -> list[str]:
     return ["--release", str(release)]
 
 # ── 版本区发现 ───────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class Artifact:
+    """一个版本跑完的产物：源码根与已校验过的截图。
+
+    只暂存**位置**，不暂存内容 —— zip 在归位时才打，省一次解压重打。
+    """
+    version: str
+    src_root: Path
+    png: Path
 
 def find_areas(repo_root: Path) -> list[Path]:
     """仓库根下所有 `<项目>/poly-*/` 版本区（两层深，与现有目录形状一致）。"""
@@ -134,6 +183,40 @@ def source_root(version_dir: Path) -> tuple[Path, bool]:
     if src.is_dir():
         return src, True
     return version_dir, False
+
+# ── 提交布局：转置项目的题号 ──────────────────────────────────────────
+
+def is_transposed(proj_name: str) -> bool:
+    return proj_name in TRANSPOSED_PROJECTS
+
+def read_slot(area: Path) -> tuple[str | None, Path | None, str | None]:
+    """从区文档读题号。返回 (题号, 读到的文档路径, 错误说明)。
+
+    题号是**产物目录名**，所以读不到就不能猜：返回 (None, 文档, 原因)，
+    由调用方决定是报错还是放行（非转置项目不需要题号）。
+
+    找不到区文档也是一个明确的失败原因，而不是「没配置」——
+    在转置项目里，没有区文档 = 没法知道这是第几题 = 没法产出。
+    """
+    for name in AREA_DOC_CANDIDATES:
+        doc = area / name
+        if not doc.is_file():
+            continue
+        text = doc.read_text(encoding="utf-8", errors="replace")
+        m = SLOT_RE.search(text)
+        if not m:
+            return None, doc, f"{name} 里没有 `{SLOT_KEY}` = `…` 这一行"
+        val = m.group(1).strip()
+        if not val:
+            return None, doc, f"{name} 里 `{SLOT_KEY}` 是空的"
+        if not SLOT_NAME_RE.fullmatch(val):
+            return None, doc, (
+                f"{name} 里 `{SLOT_KEY}` = `{val}` 不能当目录名"
+                f"（只收字母、数字、`_`、`-`）")
+        return val, doc, None
+    return None, None, (
+        "区根没有区文档（" + " / ".join(AREA_DOC_CANDIDATES)
+        + f"），读不到 `{SLOT_KEY}` 题号")
 
 # ── JDK 选择 ────────────────────────────────────────────────────────
 #
@@ -560,21 +643,40 @@ def run_check_code(repo_root: Path, area: Path, checks_script: Path | None,
 
 # ── 主流程 ───────────────────────────────────────────────────────────
 
-def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
+def process_area(repo_root: Path, area: Path, out_root: Path,
                  javac: str, java: str, python: str, checks_script: Path | None,
-                 skip_check: bool, dry_run: bool, release: int | None = None) -> list[str]:
+                 skip_check: bool, dry_run: bool,
+                 release: int | None = None) -> tuple[list[str], list[Artifact], str | None]:
+    """把**一个区**编译、截图、校验完，产出暂存到 stage，但**不落提交目录**。
+
+    返回 (问题列表, 产物列表, 题号)。产物列表空 = 该区没产出；题号只在转置项目里非空。
+
+    为什么不在这里落盘：转置布局下一个 `vNN` 目录由**多个区**共同写入，某区单独
+    落盘会在提交树里留下半棵树（该 `vNN` 里只有部分题号）。所以归位统一交给
+    `commit_*`，等齐了再写。
+    """
     proj = area.parent.name
     area_name = area.name
     problems: list[str] = []
 
     versions = find_versions(area)
     if not versions:
-        return [f"{_posix(area.relative_to(repo_root))} 下没有 vNN 版本目录"]
+        return [f"{_posix(area.relative_to(repo_root))} 下没有 vNN 版本目录"], [], None
+
+    # 题号：转置项目必须声明（产物目录名靠它）；其余项目声明了也不生效，但要吭声。
+    slot, doc, why = read_slot(area)
+    if is_transposed(proj):
+        if slot is None:
+            return [f"缺题号：{why}"], [], None
+    elif doc is not None and SLOT_RE.search(
+            doc.read_text(encoding="utf-8", errors="replace")):
+        print(f"    ！{_posix(doc.relative_to(repo_root))} 里声明了 `{SLOT_KEY}`，"
+              f"但 {proj} 不在 TRANSPOSED_PROJECTS 里，本轮忽略")
 
     if not skip_check and not dry_run:
         problems += run_check_code(repo_root, area, checks_script, python, out_root, javac)
         if problems:
-            return problems
+            return problems, [], slot
 
     stage = out_root / f"stage-{proj}-{area_name}"
     if stage.exists():
@@ -582,6 +684,7 @@ def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
     stage.mkdir(parents=True, exist_ok=True)
 
     helper_dir = ensure_helper(out_root, javac, release) if not dry_run else out_root / "_helper"
+    artifacts: list[Artifact] = []
 
     for v in versions:
         src_root, has_src = source_root(v)
@@ -635,27 +738,62 @@ def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
             continue
 
         print(f"    √ {v.name}  截图 {png.stat().st_size // 1024} KB")
+        artifacts.append(Artifact(version=v.name, src_root=src_root, png=png))
 
-    if problems:
-        return problems
+    return problems, artifacts, slot
 
-    if dry_run:
-        return []
+# ── 归位 ─────────────────────────────────────────────────────────────
 
-    # ── 全部版本都过了才产出提交目录：要么完整要么没有 ──────────────
-    dest = sub_root / proj / area_name
+def commit_default(repo_root: Path, area: Path, artifacts: list[Artifact],
+                   sub_root: Path) -> None:
+    """默认布局：`提交/<项目>/<区名>/vNN-src.zip` + `vNN.png`。
+
+    整个区目录**先删后建**：该目录是本区独占的，重建才能清掉上一轮多出来的文件
+    （例如某版被删掉后遗留的 `v04-src.zip`）。
+    """
+    dest = sub_root / area.parent.name / area.name
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True, exist_ok=True)
+    for a in artifacts:
+        pack_src_zip(a.src_root, dest / f"{a.version}-src.zip", "src")
+        shutil.copy2(a.png, dest / f"{a.version}.png")
+    print(f"  → {_rel(repo_root, dest)}/  {len(list(dest.iterdir()))} 个文件")
 
-    for v in versions:
-        src_root, _ = source_root(v)
-        pack_src_zip(src_root, dest / f"{v.name}-src.zip", "src")
-        shutil.copy2(stage / f"{v.name}.png", dest / f"{v.name}.png")
+def commit_transposed(repo_root: Path, proj: str, produced: list[tuple[Path, str, list[Artifact]]],
+                      sub_root: Path) -> list[str]:
+    """转置布局：`提交/<项目>/vNN/<题号>/src.zip` + `screenshot.png`。
 
-    shutil.rmtree(stage, ignore_errors=True)
-    rel = _posix(dest.relative_to(repo_root))
-    print(f"  → {rel}/  {len(list(dest.iterdir()))} 个文件")
+    `produced` 是本项目**本轮处理过的**每个区：(区路径, 题号, 产物)。
+
+    **只替换自己那个题号目录，不动项目的其余部分**：`--area` 只跑一个区时，
+    整棵项目树重建会顺手删掉本轮没处理的其它题号 —— 那不是失败，是数据丢失。
+    """
+    problems: list[str] = []
+    seen: dict[str, str] = {}
+    for area, slot, _ in produced:
+        if slot in seen:
+            problems.append(
+                f"题号 `{slot}` 撞车：{_posix(area.relative_to(repo_root))} 与 "
+                f"{seen[slot]} 都声明 `{SLOT_KEY}` = `{slot}`。"
+                f"同一项目下的题号必须唯一，否则后一个会盖掉前一个")
+        else:
+            seen[slot] = _posix(area.relative_to(repo_root))
+    if problems:
+        return problems
+
+    written = 0
+    for area, slot, artifacts in produced:
+        for a in artifacts:
+            dest = sub_root / proj / a.version / slot
+            if dest.exists():
+                shutil.rmtree(dest)
+            dest.mkdir(parents=True, exist_ok=True)
+            pack_src_zip(a.src_root, dest / "src.zip", "src")
+            shutil.copy2(a.png, dest / "screenshot.png")
+            written += 1
+    print(f"  → {_rel(repo_root, sub_root / proj)}/vNN/<题号>/  "
+          f"{written} 个版本×题号")
     return []
 
 def main(argv: list[str] | None = None) -> int:
@@ -740,27 +878,51 @@ def main(argv: list[str] | None = None) -> int:
     print()
 
     failed = 0
+    # 转置项目按项目攒齐再落盘；默认项目按区立即落盘（该区目录是它独占的）。
+    by_proj: dict[str, list[tuple[Path, str, list[Artifact]]]] = {}
+
     for area in areas:
+        proj = area.parent.name
         rel = _posix(area.relative_to(repo_root)) if area.is_relative_to(repo_root) else _posix(area)
         print(f"== {rel}")
-        problems = process_area(repo_root, area, sub_root, out_root,
-                               javac, java, args.python, checks,
-                               args.skip_check, args.dry_run, release)
+        problems, artifacts, slot = process_area(
+            repo_root, area, out_root, javac, java, args.python, checks,
+            args.skip_check, args.dry_run, release)
         if problems:
             failed += 1
             print(f"  × FAIL")
             for p in problems:
                 for i, line in enumerate(p.split("\n")):
                     print(f"      {line}" if i == 0 else f"        {line}")
+        elif not args.dry_run:
+            if is_transposed(proj):
+                by_proj.setdefault(proj, []).append((area, slot, artifacts))
+            else:
+                commit_default(repo_root, area, artifacts, sub_root)
         print()
 
     if failed:
         print(f"× {failed}/{len(areas)} 个版本区失败 —— 未产出（或未更新）提交目录")
         print("  提交包要么完整要么没有：一个残缺的提交包比没有更糟。")
         return 1
+
+    # 转置项目的归位放在最后：同一项目的多个区必须**全部成功**才写，
+    # 否则会留下一个「v01 里只有 1/、2/ 缺 3/」的半棵树。
+    if not args.dry_run:
+        for proj, produced in by_proj.items():
+            errs = commit_transposed(repo_root, proj, produced, sub_root)
+            if errs:
+                print(f"× {proj} 归位失败：")
+                for e in errs:
+                    print(f"    {e}")
+                return 1
+
     if args.dry_run:
         print("√ dry-run 完成（未产出任何文件）")
         return 0
+    # 暂存目录都归位完了，清掉。截图是中间产物，提交树里已有副本。
+    for area in areas:
+        shutil.rmtree(out_root / f"stage-{area.parent.name}-{area.name}", ignore_errors=True)
     print(f"√ {len(areas)}/{len(areas)} 个版本区完成 —— 提交目录在 {_posix(sub_root)}/")
     return 0
 
