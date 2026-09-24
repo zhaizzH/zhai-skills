@@ -63,6 +63,23 @@ CONSOLE_FONT_SIZE = 16
 CONSOLE_BG = (30, 30, 30)
 CONSOLE_FG = (220, 220, 220)
 CONSOLE_MAX_LINES = 34          # 720px / (16px * 1.3) 行高
+# 控制台渲染的字体候选，按优先级；实际选中「第一个能把输出里每个字符都画出来」的。
+#
+# 为什么不写死 Consolas（consola.ttf）：它**没有中文字形**，中文会渲染成豆腐块
+# （.notdef 方框）。而豆腐块图的像素标准差约 28，能轻松通过 check_not_blank ——
+# 缺陷会静默交付，这正是本候选表要堵的洞。
+# 为什么黑体/宋体排在雅黑前面：它们的 ASCII 是等宽的（中文宽 = 2×ASCII 宽），
+# 而 `poly-singleton-demo` v02 这类输出靠「汉字占两列」的空格对齐表格；
+# 比例宽度的 ASCII 会让表格列错位。雅黑只作最后兜底。
+CONSOLE_FONT_CANDIDATES = (
+    "consola.ttf",   # Consolas：纯 ASCII 输出时最好看，但画不了中文
+    "simhei.ttf",    # 黑体：等宽 ASCII + 有中文字形
+    "simsun.ttc",    # 宋体：同上
+    "msyh.ttc",      # 微软雅黑：有中文字形，但 ASCII 比例宽度，表格可能错位
+)
+# 零宽字符：没有字形，但不该算作「字体缺字形」。
+# 用码点构造而非字面量 —— 字面量在源码里是隐形的，谁也看不出漏了哪个。
+ZERO_WIDTH_CHARS = frozenset(map(chr, (0x200B, 0x200C, 0x200D, 0xFEFF)))
 # 判「不是纯色」的阈值：像素标准差低于此值视为空白图。
 BLANK_STDDEV_THRESHOLD = 3.0
 
@@ -76,6 +93,19 @@ def _setup_stdout() -> None:
 
 def _posix(p: str | Path) -> str:
     return Path(p).as_posix()
+
+def release_flags(release: int | None) -> list[str]:
+    """把目标主版本翻译成 javac 参数。
+
+    `--release` 是 JDK 9 才有的；JDK 8 上它会报「无效的标记」，而用 JDK 8
+    编 Java 8 目标本来就不需要钉版本 —— 编译器自己就是那个版本。
+    所以 8 及以下退化成 `-source/-target`（JDK 8 认，9+ 也仍认）。
+    """
+    if release is None:
+        return []
+    if release <= 8:
+        return ["-source", str(release), "-target", str(release)]
+    return ["--release", str(release)]
 
 # ── 版本区发现 ───────────────────────────────────────────────────────
 
@@ -252,9 +282,7 @@ def compile_version(src_root: Path, out_dir: Path, extra_src: Path | None,
     files = [str(p) for p in _java_files(src_root)]
     cmd = [javac, "-encoding", "UTF-8", "-implicit:none",
            "-sourcepath", str(src_root)]
-    if release is not None:
-        # 钉住目标版本："1.8" 与 "8" 是同一个意思，javac 两种都收。
-        cmd += ["--release", str(release)]
+    cmd += release_flags(release)
     if extra_src is not None:
         # 辅助类另编一份，只加 classpath，不进 -sourcepath（否则会被当源码打包）
         cmd += ["-cp", str(extra_src)]
@@ -326,8 +354,13 @@ public final class ScreenshotHelper {
 '''
 
 def ensure_helper(out_root: Path, javac: str, release: int | None = None) -> Path:
-    """把 ScreenshotHelper 编到 out_root/_helper/，返回该目录。已存在则复用。"""
-    helper_dir = out_root / "_helper"
+    """把 ScreenshotHelper 编到 out_root/_helper-<目标版本>/，返回该目录。
+
+    缓存目录**必须带目标版本**：不带的话，先用 JDK 21 跑一次留下的 class 会被
+    之后的 JDK 8 运行直接复用，`java` 报 `UnsupportedClassVersionError` ——
+    症状看着像被测程序有问题，其实只是缓存没按版本隔离。
+    """
+    helper_dir = out_root / f"_helper-{release if release is not None else 'path'}"
     marker = helper_dir / "ScreenshotHelper.class"
     if marker.is_file():
         return helper_dir
@@ -335,9 +368,8 @@ def ensure_helper(out_root: Path, javac: str, release: int | None = None) -> Pat
     src = helper_dir / "ScreenshotHelper.java"
     src.write_text(SCREENSHOT_HELPER_SRC, encoding="utf-8")
     cmd = [javac, "-encoding", "UTF-8"]
-    if release is not None:
-        # 辅助类必须与主代码同目标版本：编成高版本会让低版 JRE 连截图都跑不起来。
-        cmd += ["--release", str(release)]
+    # 辅助类必须与主代码同目标版本：编成高版本会让低版 JRE 连截图都跑不起来。
+    cmd += release_flags(release)
     cmd += ["-d", str(helper_dir), str(src)]
     proc = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     if proc.returncode != 0:
@@ -348,9 +380,15 @@ def ensure_helper(out_root: Path, javac: str, release: int | None = None) -> Pat
 
 def run_console(java: str, src_root: Path, out_dir: Path, main_class: str,
                 cwd: Path) -> tuple[str, str]:
-    """跑控制台程序，返回 (stdout, stderr)。"""
+    """跑控制台程序，返回 (stdout, stderr)。
+
+    `-cp` 一律用**绝对路径**：cwd 被设成版本根（资源回退路径依赖它），
+    而 java 是按 cwd 解析相对 classpath 的 —— 传相对路径会直接
+    `ClassNotFoundException`，看上去像源码里没有主类。
+    """
     cmd = [java, "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8",
-           "-cp", os.pathsep.join([str(out_dir), str(src_root)]), main_class]
+           "-cp", os.pathsep.join([str(out_dir.resolve()),
+                                   str(src_root.resolve())]), main_class]
     proc = subprocess.run(cmd, capture_output=True, text=True,
                           encoding="utf-8", errors="replace", cwd=str(cwd),
                           timeout=RUN_TIMEOUT_SECONDS)
@@ -361,7 +399,9 @@ def run_gui_shot(java: str, src_root: Path, out_dir: Path, helper_dir: Path,
     """跑 GUI 程序并截窗口图。返回问题列表（空 = 成功）。"""
     cmd = [java, "-Djava.awt.headless=false", "-Dfile.encoding=UTF-8",
            "-Dstdout.encoding=UTF-8",
-           "-cp", os.pathsep.join([str(out_dir), str(helper_dir), str(src_root)]),
+           "-cp", os.pathsep.join([str(out_dir.resolve()),
+                                   str(helper_dir.resolve()),
+                                   str(src_root.resolve())]),
            "ScreenshotHelper", main_class, str(png), str(int(GUI_WARMUP_SECONDS * 1000))]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
@@ -380,9 +420,68 @@ def run_gui_shot(java: str, src_root: Path, out_dir: Path, helper_dir: Path,
         return [f"截图失败（退出码 {proc.returncode}）：{err.strip()[:400]}"]
     return []
 
-def render_console_png(stdout: str, stderr: str, main_class: str, png: Path) -> None:
-    """把控制台输出渲染成图。不放真终端截图 —— 那受字体/尺寸/主题影响，不可复现。"""
-    from PIL import Image, ImageDraw, ImageFont
+def missing_glyphs(font, text: str) -> set[str]:
+    """返回 `text` 里字体画不出（会渲染成豆腐块）的字符集合。
+
+    判据：拿一个字体肯定没有的码位（`chr(0xFFFF)`，Unicode 永久保留的非字符）
+    渲成位图当 `.notdef` 参照，再把每个待测字符单独渲成位图逐位比对 ——
+    位图相同 = 该字符也走了 .notdef 分支，即字形缺失。
+
+    为什么不只用 `font.getmask(ch)` 的宽度非零来判断：空格的位图本身就是全空，
+    会和某些缺失字形撞车；而且宽度非零并不代表画出来不是方框。
+    逐位比对才是「是否真的画出了这个字」的直接证据。
+    """
+    from PIL import Image, ImageDraw
+
+    size = CONSOLE_FONT_SIZE
+    # 参照位图：0xFFFF 是所有字体都不该有字形的码位。
+    probe = Image.new("L", (size * 2, size * 2), 0)
+    ImageDraw.Draw(probe).text((0, 0), chr(0xFFFF), fill=255, font=font)
+    notdef = probe.tobytes()
+
+    bad: set[str] = set()
+    for ch in set(text):
+        # 空白与零宽字符按定义没有字形，不算缺失（否则会误报整个输出不可渲染）。
+        if ch.isspace() or ch in ZERO_WIDTH_CHARS:
+            continue
+        img = Image.new("L", (size * 2, size * 2), 0)
+        ImageDraw.Draw(img).text((0, 0), ch, fill=255, font=font)
+        if img.tobytes() == notdef:
+            bad.add(ch)
+    return bad
+
+def pick_console_font(text: str):
+    """挑一个能把 `text` 全部画出来的字体。返回 (字体, 选用文件名, 问题列表)。
+
+    只 `truetype()` 打开成功不算数 —— Consolas 也能打开，只是画中文时全出豆腐块。
+    所以必须拿**本次真实输出**里的字符集去验字形，验过才算可用。
+    """
+    from PIL import ImageFont
+
+    problems: list[str] = []
+    for name in CONSOLE_FONT_CANDIDATES:
+        try:
+            font = ImageFont.truetype(name, CONSOLE_FONT_SIZE)
+        except OSError as e:
+            problems.append(f"{name}：打不开（{e}）")
+            continue
+        bad = missing_glyphs(font, text)
+        if not bad:
+            return font, name, []
+        sample = "".join(sorted(bad)[:8])
+        problems.append(f"{name}：缺 {len(bad)} 个字形（如 {sample}）")
+    return None, "", problems
+
+def render_console_png(stdout: str, stderr: str, main_class: str, png: Path) -> list[str]:
+    """把控制台输出渲染成图。返回问题列表（空 = 成功）。
+
+    不放真终端截图 —— 那受字体/尺寸/主题影响，不可复现。
+
+    字体必须**验过字形**再用：写死 Consolas 时中文会整片渲染成豆腐块，
+    而豆腐块图的像素标准差约 28，能通过 check_not_blank 静默交付。
+    所以这里挑剔字体，挑不出来就明确报错让该版 FAIL —— 宁可失败，不可交付乱码。
+    """
+    from PIL import Image, ImageDraw
 
     lines = [f"$ java {main_class}"]
     lines += stdout.rstrip("\n").split("\n") if stdout.strip() else ["(无输出)"]
@@ -392,21 +491,21 @@ def render_console_png(stdout: str, stderr: str, main_class: str, png: Path) -> 
     if len(lines) > CONSOLE_MAX_LINES:
         lines = lines[:CONSOLE_MAX_LINES] + [f"... (共 {len(lines)} 行)"]
 
+    font, font_name, font_problems = pick_console_font("\n".join(lines))
+    if font is None:
+        return ["找不到能完整渲染本输出的字体（输出里含中文而可用字体都缺 CJK 字形）。\n"
+                "  试过的字体：\n" + "\n".join(f"    · {p}" for p in font_problems) +
+                "\n  装一款中文字体（如 SimHei/simhei.ttf）到系统字体目录，"
+                "或把它的路径加进 CONSOLE_FONT_CANDIDATES。"]
+
     img = Image.new("RGB", CONSOLE_IMAGE_SIZE, CONSOLE_BG)
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("consola.ttf", CONSOLE_FONT_SIZE)
-    except OSError:
-        try:
-            font = ImageFont.truetype("cour.ttf", CONSOLE_FONT_SIZE)
-        except OSError:
-            font = ImageFont.load_default()
-
     y = 18
     for line in lines:
         draw.text((18, y), line, fill=CONSOLE_FG, font=font)
         y += int(CONSOLE_FONT_SIZE * 1.35)
     img.save(png)
+    return []
 
 def check_not_blank(png: Path) -> list[str]:
     """截出来是一张纯色/空白图 = 资源没加载、窗口没画出来。
@@ -525,7 +624,7 @@ def process_area(repo_root: Path, area: Path, sub_root: Path, out_root: Path,
                 if serr.strip() and "Exception" in serr:
                     errs = [f"运行期报错：{serr.strip()[:300]}"]
                 else:
-                    render_console_png(out, serr, main_class, png)
+                    errs = render_console_png(out, serr, main_class, png)
         if errs:
             problems += [f"{v.name}：{e}" for e in errs]
             continue
@@ -592,9 +691,13 @@ def main(argv: list[str] | None = None) -> int:
     if not repo_root.is_dir():
         print(f"× 仓库根不存在：{_posix(repo_root)}")
         return 1
+    # 立刻绝对化：运行时 cwd 会被换成各版本根（资源回退路径要用），
+    # 相对路径在子进程里会按**新** cwd 解析 —— 于是 `-cp out` 找不到类
+    # （ClassNotFoundException），GUI 路径下连 PNG 都会被写进版本区内部。
+    repo_root = repo_root.resolve()
 
-    sub_root = args.submission_root or (repo_root / SUBMISSION_DIR)
-    out_root = args.out_root or (repo_root / "out")
+    sub_root = (args.submission_root or (repo_root / SUBMISSION_DIR)).resolve()
+    out_root = (args.out_root or (repo_root / "out")).resolve()
     try:
         out_root.mkdir(parents=True, exist_ok=True)
     except OSError as e:

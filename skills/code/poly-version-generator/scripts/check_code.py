@@ -214,11 +214,15 @@ def check_classpath_hygiene(version_dir: Path, out_root: Path) -> list[str]:
                 f"版本目录里有 {{name}}/（= {name}/）—— 构建产物不属于版本产物；"
                 "把它放到仓库根，且**每版一个独立 out 目录**（out/<版本名>）"
             )
-    # 本版 out 是否被兄弟版本共享：同名 out 目录里出现不属于本版的类
+    # 本版 out 是否被兄弟版本共享：同名 out 目录里出现不属于本版的类。
+    # 比的是**顶层类名**：javac 会给匿名类/内部类产出 `Outer$1.class`、
+    # `Outer$State.class`，它们的 stem 带 `$` 后缀，直接跟源文件 stem 比会全部
+    # 误判成「兄弟版本的类」—— 而真被污染的报告就淹在假阳性里了。
+    own_stems = {f.stem.split("$", 1)[0] for f in source_files(version_dir / "src")}
     own = out_root / version_dir.name
     if own.is_dir():
-        foreign = [p.name for p in own.rglob("*.class") if p.stem not in
-                   {f.stem for f in source_files(version_dir / "src")}]
+        foreign = [p.name for p in own.rglob("*.class")
+                   if p.stem.split("$", 1)[0] not in own_stems]
         if foreign:
             problems.append(
                 f"{_posix(own)} 里出现了本版源码之外的类（{'、'.join(sorted(set(foreign))[:5])}）"
