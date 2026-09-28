@@ -8,7 +8,7 @@
 
 # 一套 profile：poly-version
 
-版本是**同一目标、整体结构相同**的若干实现，内部命名等细节各版自定。
+版本是**同一任务由 N 个人各写一版**，整体结构相同、内部命名等细节各版自定。
 版本根只锁 `src/`，`src/` 内部一律不管（分包、拆几个文件、命名都由各版自定）。
 
 无行数上限、无单文件约束、无 `提交/` 提交包 —— 只保证一件事：
@@ -290,8 +290,9 @@ class Profile:
 # 属于 README.txt 的职责。**行内**提到 `javac` 不算（例如警告某个写法会多一次编译），
 # 只查文件头部的独立命令行。
 #
-# ⚠️ 本类检查**只在这是单一 profile 时才会有实际效果**。若区文档用 `java_checks`
-# 把它关掉（或词表为空），审计就不跑它 —— 见 `_apply_config`。
+# ⚠️ 本类检查可被区文档的 `java_checks` = `off` 关掉（或词表置空），
+# 关掉后审计就不跑它 —— 见 `_apply_config`。现在只有 `poly-version` 一套
+# profile，所以这是唯一的开关。
 #
 # ⚠️ 例外：「实验一 合并排序」**不算**禁用词 —— 它就是实验题目，报告标题与 README 都要用。
 JAVA_FORBIDDEN_WORDS: tuple[str, ...] = (
@@ -306,9 +307,9 @@ JAVA_HEADER_COMMAND_RE = re.compile(
     r"^\s*(?:\*\s*|/\*\s*|//\s*)?(?:编译|运行)\s*[:：]?\s*(?:javac|java)\b")
 JAVA_HEADER_LINES = 15
 
-# ── profile：整体结构相同、内部细节各异 ─────────────────────────────────
+# ── profile：同一任务 N 个人各写一版、内部细节各异 ─────────────────────
 #
-# 版本是**同一目标、整体结构相同**的若干实现：版本根的骨架逐字一致
+# 版本是**同一任务、整体结构相同**的若干实现：版本根的骨架逐字一致
 # （同一份 `src/` 布局、同一批入口路径），各版**内部命名与实现细节**自定。
 #
 # 所以只锁 `src/`：里面原有几个包、几个源文件、怎么分包，一律不管。
@@ -322,10 +323,10 @@ JAVA_HEADER_LINES = 15
 POLY_VERSION = Profile(
     key="poly-version",
     title="poly-version",
-    intro="同一目标整体结构相同、内部细节各异的若干实现，故只锁 `src/`。",
+    intro="同一任务由 N 个人各写一版，整体结构相同、内部细节各异，故只锁 `src/`。",
     spec=(
         ("src/", True,
-         "该版本的完整源码，**整体结构与其它版一致**（同一批入口与包路径），"
+         "该版本的完整源码。**建议整体结构与其它版一致**（同一批入口与包路径），"
          "内部命名与实现细节自定。本 profile 只锁 `src/`，内部有几个包、"
          "几个源文件一律不管；IDE 元数据（`.iml`/`.idea/`）不收录"),
     ),
@@ -337,26 +338,19 @@ POLY_VERSION = Profile(
     stray_hint="版本根只该有 src/（IDE 文件不入库，探针与构建产物放仓库根）",
 )
 
-SOURCE_SNAPSHOT = Profile(
-    key="source-snapshot",
-    title="source-snapshot",
-    intro="同一既有项目 N 种风格**各改一遍**，每版是完整源码快照，故只锁 `src/`。",
-    spec=(
-        ("src/", True,
-         "该分支的完整源码快照，**照抄原项目的包结构**。本 profile 只锁 `src/`，"
-         "内部有几个包、几个 `.java` 一律不管；IDE 元数据（`.iml`/`.idea/`）不收录"),
-    ),
-    glob_required=(),
-    # 快照型不套用「交付用词」词表：每版是既有项目的原样快照，改词就破坏了
-    # 「与原分支逐字一致」这个前提。
-    java_forbidden_words=(),
-    java_forbidden_re=None,
-    java_header_command_check=False,
-    allowed_root_suffixes=frozenset(),
-    stray_hint="版本根只该有 src/（IDE 文件不入库，探针与构建产物放仓库根）",
-)
+SOURCE_SNAPSHOT = None  # 已取消：见 PROFILES 处的说明（两套 profile 已合并为单一 poly-version）
 
-PROFILES: dict[str, Profile] = {p.key: p for p in (POLY_VERSION, SOURCE_SNAPSHOT)}
+# 单一 profile：`poly-version`。
+#
+# 曾经还有一套 `source-snapshot`（同一份代码的各改一遍的冻结快照，不做用词检查）。
+# 用户 2026-09-25 定：**不要两套规矩**，全部统一为「不同人写同一任务项目」。
+# 于是删掉该 profile，所有区一律走 poly-version。
+#
+# 当时 `source-snapshot` 的唯一作用是避开交付用词检查的假阳性 ——
+# 那个假阳性（`prototype/EnemyPrototype.java` 里「契约」是普通中文）是真实发生过的，
+# 所以统一时要留意：若某区出现过这类误报，是把词从 `JAVA_FORBIDDEN_WORDS` 里去掉，
+# 而不是另起一套 profile（`java_checks = off` 仍可按区关闭）。
+PROFILES: dict[str, Profile] = {p.key: p for p in (POLY_VERSION,)}
 DEFAULT_PROFILE = POLY_VERSION.key
 # 区根共享文件：n 个版本共有，版本目录里不得出现同名文件
 AREA_FILES: tuple[tuple[str, str], ...] = (
@@ -1075,11 +1069,23 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
     )
     # 编号动态排，改条目时不用同步序号
     rules: list[str] = [
-        f"禁止改 {fixed} 这几个名字，也禁止把入口改名。"
+        f"禁止改 {fixed} 这几个名字。"
         "「顶层不许多放文件」指源文件与改名 —— 上表列出的产物都是许可的。"
         if fixed else
-        "禁止把入口改名。「顶层不许多放文件」指源文件与改名 —— 上表列出的产物都是许可的。",
+        "顶层不许多放产物文件 —— 上表列出的产物都是许可的。",
     ]
+    # 入口名：**建议**可区分，不强制。
+    #
+    # 曾经写「禁止把入口改名」，与 check_code.py 的 build_run_contract 相反 ——
+    # 那边明确建议「入口类名唯一（ShapeMain、CarMain），绝不允许有效 classpath 里
+    # 有两个 Main」，而这只有靠改名才能做到；rules.md 又说 `entry` 配置行可选、
+    # 不写就不锁入口名。三处口径打架，且没有任何机器检查支撑「禁止改名」。
+    # 统一为：建议保持可区分，不强制；改了名就同步区文档的 `entry` 行。
+    if profile.entry:
+        rules.append(
+            "**建议**各版入口名可区分（如 `ShapeMain`、`CarMain`），便于识别与避免 "
+            "classpath 撞名；**不强制**。一旦改名，同步更新区文档的 `entry` 行。"
+        )
     # 这两条只在区文档**声明了**对应产物时才写：`required` 一旦覆盖，
     # 未声明的产物就不在审计范围内，再列出来就是把规则指向不存在的文件，
     # 而「多出顶层文件」还会把它判成违规（见 `_top_level_strays`）。
@@ -1104,7 +1110,7 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
         out.append("**交付源码里不得出现这些词**（硬性）")
         out.append("")
         out.append(
-            "各版是**同一目标的若干替补方案，每版都要能当独立的人写的东西交出去**。所以交付源码里"
+            "各版是**同一任务下不同人各写的一版，每版都要能当独立的人写的东西交出去**。所以交付源码里"
             "不得留下横向对照的内部概念 —— 一旦出现，读代码的人立刻能看出这是同一批人的"
             "多版本实验，「雷同双方记 0 分」就是要防这个。禁止三类："
         )

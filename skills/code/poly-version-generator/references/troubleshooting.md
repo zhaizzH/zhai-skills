@@ -6,7 +6,7 @@
 
 ```
 审计 poly-singleton/ —— 共 5 个版本
-profile：poly-version（同一目标整体结构相同、内部细节各异的若干实现，故只锁 `src/`。）
+profile：poly-version（同一任务由 N 个人各写一版，整体结构相同、内部细节各异，故只锁 `src/`。）
 映射：区文档里没有映射行（本 profile 不靠映射行定位文件）
 
 √ v01  PASS

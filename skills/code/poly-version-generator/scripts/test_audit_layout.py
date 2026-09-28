@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import audit_layout as A      # noqa: E402
 
 def _mk_area(root: Path) -> Path:
-    """造一个最小的 source-snapshot 版本区：area/v01/src/..."""
+    """造一个最小的版本区：area/v01/src/...（单一 profile poly-version）"""
     area = root / "Demo" / "poly-demo"
     (area / "v01" / "src").mkdir(parents=True)
     (area / "v01" / "src" / "Main.java").write_text(
@@ -37,19 +37,19 @@ def main() -> int:
         # 文本源码：能解码。用词检查要扫到它。
         (area / "v01" / "src" / "Main.java").write_text(
             "public class Main { /* v30 */ }\n", encoding="utf-8")
-        files = {str(p) for p in A._source_files(area / "v01", A.PROFILES["source-snapshot"])}
+        files = {str(p) for p in A._source_files(area / "v01", A.POLY_VERSION)}
         assert any(f.endswith("Main.java") for f in files), files
 
         # 二进制资源：不能当文本读，必须被筛掉 —— 否则字节凑出的「v30」造成假阳性。
         jpg = area / "v01" / "src" / "bg2.jpg"
         jpg.write_bytes(bytes(range(256)) * 4 + b"v30")
         assert not A._is_text_file(jpg), "二进制文件不该判为文本"
-        files = {str(p) for p in A._source_files(area / "v01", A.PROFILES["source-snapshot"])}
+        files = {str(p) for p in A._source_files(area / "v01", A.POLY_VERSION)}
         assert not any(f.endswith("bg2.jpg") for f in files), files
 
         # src/ 不存在的版本：由 4.2 报缺目录，_source_files 只需平静返回空。
         (area / "v02").mkdir()
-        assert A._source_files(area / "v02", A.PROFILES["source-snapshot"]) == []
+        assert A._source_files(area / "v02", A.POLY_VERSION) == []
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
