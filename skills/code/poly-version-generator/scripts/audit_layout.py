@@ -78,22 +78,11 @@ def _setup_stdout() -> None:
 # 一、区根文档 —— 一个版本区**只有一份** md
 # ══════════════════════════════════════════════════════════════════════
 #
-# 曾经是四份：区根 PLAN.md / CONTRACT.md / REPORT.md，外加每版一份 MANIFEST.md。
 # 用户 2026-09-22 定：**不要那么多 md**，区根只留一份总结，版本目录里一份不留。
+# 2026-10-13 再定：总结只留**两节** —— 目录与文件树（本脚本 `--emit-spec` 生成）、
+# 任务与版本 → 作者映射。取舍、横向结论都不落文档，看代码与 diff 即得。
 #
-# 于是四份的职责合并成一份，写在区根的这个文件里：
-#
-#   · 目录规范（本脚本 `--emit-spec` 生成的那一节）
-#   · 版本 → 风格映射总表、生成批次、各版状态表   （原 PLAN.md）
-#   · 各版实际产出了什么、本版取舍、校验记录      （原每版 MANIFEST.md，现按版本分小节）
-#   · 横向对比结论                                （原 REPORT.md）
-#
-# 名字取 `项目总结.md`（用户指定）。要点：**版本目录里不再有任何 .md** ——
-# `MANIFEST.md` 已取消，其内容并入区根总结的对应小节。
-#
-# ⚠️ 少写文档 ≠ 少记信息。信息总量不该缩水，只是从「四份分散」变成「一份分节」。
-# 版本内不再有文件清单时，最容易丢的是「这版为什么多/少一个文件」——
-# 那份解释现在归区根总结的版本小节。
+# 名字取 `项目总结.md`（用户指定）。要点：**版本目录里不再有任何 .md**。
 AREA_SUMMARY = "项目总结.md"
 
 # 过渡期兼容：老区还在用 CONTRACT.md 装映射行与规范节。审计器**读得到**它，
@@ -228,8 +217,7 @@ IGNORE_GLOBS: list[str] = [
     "*.py[cod]",                            # Python 字节码
     "~$*", ".~*", "*~", "*.swp", "*.swo",   # Office 锁文件 / 编辑器临时文件
     "*.log", "*.tmp", "*.bak",              # 日志与临时文件（与 .gitignore 同步）
-    "check_code.txt",                      # check_code.py 的检查报告（审计 4.7 读它）
-    "Desktop.ini", "Thumbs.db",
+        "Desktop.ini", "Thumbs.db",
 ]
 
 
@@ -326,9 +314,8 @@ POLY_VERSION = Profile(
     intro="同一任务由 N 个人各写一版，整体结构相同、内部细节各异，故只锁 `src/`。",
     spec=(
         ("src/", True,
-         "该版本的完整源码。**建议整体结构与其它版一致**（同一批入口与包路径），"
-         "内部命名与实现细节自定。本 profile 只锁 `src/`，内部有几个包、"
-         "几个源文件一律不管；IDE 元数据（`.iml`/`.idea/`）不收录"),
+         "该版本的完整源码。建议整体结构与其它版一致（diff 有锚点），"
+         "内部结构一律自定；IDE 元数据不收录"),
     ),
     glob_required=(),
     java_forbidden_words=JAVA_FORBIDDEN_WORDS,
@@ -354,7 +341,7 @@ PROFILES: dict[str, Profile] = {p.key: p for p in (POLY_VERSION,)}
 DEFAULT_PROFILE = POLY_VERSION.key
 # 区根共享文件：n 个版本共有，版本目录里不得出现同名文件
 AREA_FILES: tuple[tuple[str, str], ...] = (
-    (AREA_SUMMARY, "区根**唯一一份**文档：规范节 + 版本→风格映射 + 各版状态 + 横向结论"),
+    (AREA_SUMMARY, "区根**唯一一份**文档：目录规范 + 版本 → 作者映射"),
 )
 
 
@@ -584,7 +571,7 @@ def _top_level_strays(version_dir: Path, mapping: dict[str, str],
 # ══════════════════════════════════════════════════════════════════════
 
 def audit_version(version_dir: Path, mapping: dict[str, str],
-                  profile: Profile) -> list[str]:
+                  profile: Profile, out_root: Path | None = None) -> list[str]:
     """审计一个版本目录，返回违规描述列表（空 = PASS）。"""
     problems: list[str] = []
 
@@ -662,24 +649,30 @@ def audit_version(version_dir: Path, mapping: dict[str, str],
     # ── 4.7 代码检查门 ──────────────────────────────────────────
     # 编译不通过、同类名冲突、out 被兄弟版本污染 —— 这些**不是布局问题**
     # （`src/` 内部本就不管），所以布局审计不能直接判。判据落在产物上：
-    # `check_code.py` 跑过之后写下的 `check_code.txt`。文件在且首行 `√` = 通过。
+    # `check_code.py` 跑过之后写下的报告。文件在且首行 `√` = 通过。
     #
     # 为何不在这里现场调 javac：审计要能在无 JDK 的机器上跑（布局检查不该依赖工具链）。
     # 所以是「先跑 check_code.py，再跑审计」，审计只验它的结论。
+    #
+    # 报告在 `<out根>/_reports/<版本名>.txt`（check_code.py 的 report_path），
+    # 不放版本目录 —— 它是检查产物，不是版本产物。
     if profile.code_checks:
-        report = version_dir / "check_code.txt"
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import check_code as _cc
+        root = out_root or version_dir.parent.parent / "out"
+        report = _cc.report_path(root, version_dir.name)
         if not (version_dir / "src").is_dir():
             pass                          # 4.2 已报缺 src/，不再重复
         elif not report.is_file():
             problems.append(
-                "缺 check_code.txt —— 先跑 `python poly-version-generator/scripts/"
-                "check_code.py <版本区>`，全部 PASS 后再审计（编译不通过不得进入下一步）"
+                "缺代码检查报告 —— 先跑 `python poly-version-generator/scripts/"
+                f"check_code.py <版本区>`，全部 PASS 后再审计；报告应在 {_posix(report.parent)}/ 下"
             )
         else:
             first = report.read_text(encoding="utf-8", errors="replace").split("\n")[0].strip()
             if not first.startswith("√"):
                 problems.append(
-                    f"check_code.txt 显示代码检查未通过（首行：{first or '空'}）—— "
+                    f"代码检查报告未通过（{_posix(report.name)} 首行：{first or '空'}）—— "
                     "修到 check_code.py 全 PASS 再重跑"
                 )
 
@@ -817,7 +810,7 @@ def _resolve_profile(area_root: Path, explicit: str | None
 
 
 def cmd_audit(area_root: Path, only: str | None,
-              explicit_profile: str | None) -> int:
+              explicit_profile: str | None, out_root: Path | None = None) -> int:
     versions = find_versions(area_root)
     if not versions:
         print(f"× {_posix(area_root)}/ 下没有 vNN 形式的版本目录")
@@ -847,7 +840,7 @@ def cmd_audit(area_root: Path, only: str | None,
 
     failed = 0
     for v in versions:
-        problems = audit_version(v, mapping, profile)
+        problems = audit_version(v, mapping, profile, out_root)
         if problems:
             failed += 1
             print(f"× {v.name}  FAIL")
@@ -960,7 +953,6 @@ def _section_head(area_name: str, profile: Profile,
     out.append("")
     out.append(
         f"本区用 **`{profile.title}`** 这套 profile —— {profile.intro}"
-        "（换 profile 要重跑 `--emit-spec --profile <名>` 覆盖本节，不要手改。）"
     )
     out.append("")
     out.append(f"- `profile` = `{profile.title}`")
@@ -1014,20 +1006,8 @@ def _doc_layer_block() -> list[str]:
     out.append("")
     out.append(
         f"整个版本区只留 `{AREA_SUMMARY}` 这一份 md（区根），"
-        "**版本目录里不放任何文档** —— 曾经的每版 `MANIFEST.md` 已取消，"
-        "它记的「本版有什么、本版取舍、校验记录」并进区根总结的对应版本小节。"
-    )
-    out.append("")
-    out.append(
-        f"`{AREA_SUMMARY}` 一份里分四块：目录规范（本节）、"
-        "版本→风格映射总表与各版状态（原 `PLAN.md`）、"
-        "各版实际产出与取舍（原每版 `MANIFEST.md`）、横向结论（原 `REPORT.md`）。"
-        "**信息总量不该缩水，只是从四份分散变成一份分节。**"
-    )
-    out.append("")
-    out.append(
-        "> 少写文档 ≠ 少记信息。版本内没有文件清单时，最容易丢的是"
-        "「这版为什么多/少一个文件」——那份解释现在归区根总结的版本小节。"
+        "**版本目录里不放任何文档**。总结只写两节：目录与文件树（生成）、"
+        "任务与版本 → 作者映射。"
     )
     out.append("")
     return out
@@ -1053,11 +1033,8 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
     out.extend(_required_tables(profile, mapping))
 
     src_dir = _expand("src", mapping)
-    out.append(f"**`{src_dir}/` 内部不受约束**（本 profile 的要点）")
-    out.append("")
     out.append(
-        f"版本根**只锁 `{src_dir}/` 这一项**：里面有几个子目录、几个源文件、怎么分包，"
-        "一律自定、审计不看。本规范只管「放在哪、叫什么」，不管「怎么写」。"
+        f"**`{src_dir}/` 内部不受约束**：几个子目录、几个源文件、怎么分包一律自定，审计不看。"
     )
     out.append("")
 
@@ -1097,6 +1074,10 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
             or any(t.lower().endswith(".docx") for t in raw_templates):
         rules.append("禁止把报告 docx 放进子目录，它必须在版本根目录。")
     rules.append(f"禁止在版本目录里另立任何 md —— 文档只有区根一份 `{AREA_SUMMARY}`。")
+    rules.append(
+        "禁止把检查报告写进版本目录 —— `check_code.py` 的报告落在 `<out根>/_reports/`，"
+        "审计从那里读。"
+    )
     for i, rule in enumerate(rules, 1):
         out.append(f"{i}. {rule}")
     out.append("")
@@ -1110,12 +1091,10 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
         out.append("**交付源码里不得出现这些词**（硬性）")
         out.append("")
         out.append(
-            "各版是**同一任务下不同人各写的一版，每版都要能当独立的人写的东西交出去**。所以交付源码里"
-            "不得留下横向对照的内部概念 —— 一旦出现，读代码的人立刻能看出这是同一批人的"
-            "多版本实验，「雷同双方记 0 分」就是要防这个。禁止三类："
+            "各版要能当**独立的人写的**代码交出去，故源码里不得留横向对照的内部概念。禁止三类："
         )
         out.append("")
-        # 三类按位置取；词表不足两段时只生成存在的那些，避免 IndexError / 空条目
+        # 三类按位置取；词表不足三段时只生成存在的那些，避免 IndexError / 空条目
         style, mode, doc_word = words[1:4], words[4:], words[0]
         if style:
             out.append(
@@ -1125,29 +1104,23 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
             )
         if mode:
             out.append(
-                "2. **设计模式名**：" + "、".join(f"`{w}`" for w in mode)
-                + "。写代码的人不会在文件头先给自己贴流派标签，贴了就像在交「对照实验的第 N 组」。"
-                "结构本身留着没问题，**只是别无中生有地自我命名**。"
+                "2. **设计模式名**：" + "、".join(f"`{w}`" for w in mode) + "。"
             )
         if doc_word:
             out.append(
                 "3. **本项目文档的规则简称**：`" + doc_word + "`（含 `"
                 + doc_word + " 4.1` 这类带编号的引用）。"
-                "要说「不得共用归并」就直接说事，别点名规则出处 —— 读者看不到那份文档，"
-                "只会觉得作者在跟某个他没见过的规范对齐。"
             )
         out.append("")
     if profile.java_header_command_check:
         out.append(
             "另外禁止在**文件头**抄「编译 / 运行」命令行（形如 `编译：javac …`、"
-            "`运行：java -Dstdout.encoding=…`）—— 那属于 `README.txt` 的职责，"
-            "夹在文件头注释里像 README 摘抄。**行内**提到 `javac` 不算违规"
-            "（例如注释里说某写法会多一次编译），只查文件头部的独立命令行。"
+            "`运行：java …`）；**行内**提到 `javac` 不算违规。"
         )
         out.append("")
     if words:
         out.append(
-            "> **例外**：「实验一 合并排序」不算禁用词 —— 它就是实验题目，报告标题与 README 都要用。"
+            "> **例外**：「实验一 合并排序」不算禁用词 —— 它就是实验题目。"
         )
         out.append("")
 
@@ -1155,8 +1128,6 @@ def build_poly_version_section(area_name: str, mapping: dict[str, str],
 
     # ── 编译与运行约定（唯一真源在 check_code.py，勿手抄到别处）──
     if profile.code_checks:
-        out.append("## 二、编译与运行（硬性）")
-        out.append("")
         out.append(build_run_contract(area_name=area_name))
 
     out.extend(_footer_notes())
@@ -1213,6 +1184,8 @@ def main(argv: list[str] | None = None) -> int:
                          "不给则读区文档里的 `profile` 行")
     ap.add_argument("--only", default=None,
                     help="只审计某一个版本，如 --only v03")
+    ap.add_argument("--out-root", type=Path, default=None,
+                    help="check_code.py 报告的所在根（默认 <版本区>/../out）")
     args = ap.parse_args(argv)
 
     _setup_stdout()
@@ -1232,7 +1205,7 @@ def main(argv: list[str] | None = None) -> int:
             print(n)
         return cmd_emit(area_root, mapping, profile, args.out)
 
-    return cmd_audit(area_root, args.only, args.profile)
+    return cmd_audit(area_root, args.only, args.profile, args.out_root)
 
 
 if __name__ == "__main__":

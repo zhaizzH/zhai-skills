@@ -236,29 +236,34 @@ def audit_version(version_dir: Path, javac: str, out_root: Path) -> list[str]:
     problems.extend(check_compile(version_dir, javac, out_root))
     return problems
 
-def _write_report(version_dir: Path, problems: list[str]) -> None:
-    """在版本目录写下 `check_code.txt` —— 布局审计（audit_layout.py 4.7）读它判门。
+def report_path(out_root: Path, version_name: str) -> Path:
+    """某版本的检查报告落在哪 —— audit_layout.py 4.7 从这里读。
 
-    首行是 `√`（通过）或 `×`（未通过）。文件在 `.gitignore` 与 `IGNORE_GLOBS` 里，
-    不作为交付产物。
+    报告写进 **out 根**而不是版本目录：它是构建/检查产物，不是版本产物，
+    版本目录里多一个文件就是一份噪音。out 根本身已被审计忽略。
+    """
+    return out_root / "_reports" / f"{version_name}.txt"
+
+def _write_report(out_root: Path, version_dir: Path, problems: list[str]) -> None:
+    """把结果写进 out 根的 `_reports/<版本名>.txt` —— 布局审计（audit_layout.py 4.7）读它判门。
+
+    首行是 `√`（通过）或 `×`（未通过）。
     """
     mark = "√" if not problems else "×"
     lines = [f"{mark} check_code.py {version_dir.name}"]
     lines.extend(f"    - {p}" for p in problems)
-    (version_dir / "check_code.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    dest = report_path(out_root, version_dir.name)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 def build_run_contract(area_name: str) -> str:
-    """规范节里「编译与运行」一节的正文 —— 唯一真源，`audit_layout.py` 从这里取。"""
+    """规范节里「编译与运行」一节的正文 —— 唯一真源，`audit_layout.py` 从这里取。
+
+    只写**可检查的规则**与命令。理由、推荐做法、排障不在生成节里 ——
+    那些归 SKILL.md 与 references/troubleshooting.md，区文档不该复述。
+    """
     out: list[str] = []
-    out.append("**每个版本独立编译、独立 out、独立工作目录**（硬性）")
-    out.append("")
-    out.append(
-        "版本区里多个 vNN 常常复用同名包（`model`/`service`/`controller`/`ui`）"
-        "与同名默认包入口 `Main`。这在**布局上合法**（`src/` 内部不受约束），"
-        "但一旦编进同一个 `out/` 或从同一个 classpath 运行，javac/java 会挑错"
-        "`Main.class`、或从兄弟版本拉错 `model.Player` —— 表现就是「找不到主类」"
-        "或静默跑错版本。所以编译与运行方式必须固定为下面这条："
-    )
+    out.append("**每个版本独立编译、独立 out、独立工作目录**（硬性）：")
     out.append("")
     out.append("```bash")
     out.append("# 在 vNN/ 里执行；每版一个独立 out 目录，绝不共用")
@@ -266,48 +271,19 @@ def build_run_contract(area_name: str) -> str:
     out.append("java  -cp ../out/vNN Main")
     out.append("```")
     out.append("")
-    out.append("三条硬约束：")
+    out.append("1. **一个版本 = 一个 out 目录 = 一个工作目录。**")
+    out.append("2. **绝不只编入口。** 永远 `$(find src -name '*.java')` 整套编译。")
+    out.append("3. **带 `-implicit:none`。**")
     out.append("")
     out.append(
-        "1. **一个版本 = 一个 out 目录 = 一个工作目录。** 绝不复用 `out/`；"
-        "目录名取版本名（`out/v03`），出问题时一眼能看出是谁的产物。"
-    )
-    out.append(
-        "2. **绝不只编入口。** 永远 `$(find src -name '*.java')` 整套编译 —— "
-        "只编 `Main.java` 时依赖不在 sourcepath，报 `cannot find symbol`，"
-        "或运行期 `NoClassDefFoundError`。"
-    )
-    out.append(
-        "3. **带 `-implicit:none`。** 不带它时 javac 会沿 sourcepath 隐式编译"
-        "**兄弟版本的源文件**，表面成功、实际拉错实现。"
-    )
-    out.append("")
-    out.append(
-        "> **结构性避免（推荐，非强制）**：各版顶层包根取版本身份（`v01` 用 `planwar.*`、"
-        "`v02` 用 `singleton.*`），永久消除同名包冲突；入口类名唯一（`ShapeMain`、`CarMain`，"
-        "绝不允许有效 classpath 里有两个 `Main`）。"
-    )
-    out.append("")
-    out.append("**机器检查**")
-    out.append("")
-    out.append(
-        "本节规则由 `poly-version-generator/scripts/check_code.py` 执行 —— "
-        "抽查重复类名、未解析 import、整套编译、out 污染四类真实故障："
+        "机器检查（重复类名、未解析 import、整套编译、out 污染；报告写 `<out根>/_reports/`）："
     )
     out.append("")
     out.append("```bash")
     out.append(f"python poly-version-generator/scripts/check_code.py {area_name}")
     out.append("```")
     out.append("")
-    out.append(
-        "**检查不通过就不得进入下一步**（写报告、打包提交、横向对比都不许开始）。"
-        "快速反应："
-    )
-    out.append("")
-    out.append("- 运行时 `NoClassDefFoundError`/`ClassNotFoundException` → `-cp`/`cwd` 错 → "
-               "确认 out 目录属于当前版本。")
-    out.append("- 编译时 `cannot find symbol` → 只编了入口 → 补上 `$(find src -name '*.java')`。")
-    out.append("- 无报错但行为错 → 选中了兄弟版本的 `model`/`Main` → 用唯一包根解决。")
+    out.append("**检查不通过就不得进入下一步**（写报告、打包提交、横向对比都不许开始）。")
     out.append("")
     return "\n".join(out)
 
@@ -331,7 +307,7 @@ def cmd_check(area_root: Path, only: str | None, javac: str,
     failed = 0
     for v in versions:
         problems = audit_version(v, javac, out_root)
-        _write_report(v, problems)
+        _write_report(out_root, v, problems)
         if problems:
             failed += 1
             print(f"× {v.name}  FAIL")
@@ -345,7 +321,7 @@ def cmd_check(area_root: Path, only: str | None, javac: str,
     if failed:
         print(f"结果：{len(versions) - failed}/{len(versions)} PASS，{failed} 处未通过")
         print("→ 不得进入下一步：先修到全部 PASS 再写报告 / 打包 / 横向对比。")
-        print("  报告已写入各版本目录的 check_code.txt（审计 4.7 会读它）。")
+        print(f"  报告已写入 {_posix(out_root)}/_reports/<版本名>.txt（审计 4.7 会读它）。")
         return 1
     print(f"结果：{len(versions)}/{len(versions)} 全部 PASS —— 可以进入下一步")
     return 0
@@ -371,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     out_root = args.out_root or (area_root.parent / "out")
+    out_root = out_root.resolve()
     return cmd_check(area_root, args.only, args.javac, out_root)
 
 if __name__ == "__main__":

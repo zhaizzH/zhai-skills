@@ -33,7 +33,7 @@
 编译产物与临时文件一律忽略，**所以 `javac` 跑过之后再审计也能 PASS**：
 `*.class`/`*.jar`、`bin/`/`out/`/`target/`/`build/`、`__pycache__/`/`.venv/`、
 `截图/`（截图工具的产出）、`~$*`/`.*~`。
-`check_code.txt` 也是忽略项 —— 它是 `check_code.py` 的检查报告，不是交付产物。
+`check_code.py` 的报告写在 `<out根>/_reports/<版本名>.txt`，不放版本目录 —— 它是检查产物，不是版本产物，版本目录里出现它属于「多出顶层文件」。
 
 清单在脚本的 `IGNORE_DIRS` / `IGNORE_GLOBS` 里。**增删时同步看一眼仓库根 `.gitignore`** ——
 两处覆盖的类别应当一致，否则会出现「git 不管、审计也放行」或反过来「git 不管、审计却报错」的错位。
