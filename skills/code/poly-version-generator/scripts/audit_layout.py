@@ -19,7 +19,7 @@
 
 一句话：规范只管「放在哪、叫什么」，不管「怎么写」。「怎么写」由各版自定。
 
-# 四种用法（审计 / 单版审计 / 生成规范节 / 省略 profile 行）
+# 用法（审计 / 单版审计 / 生成规范节）
 
     # 审计：逐个版本比对实际文件与 SPEC，输出 PASS/FAIL 表
     python audit_layout.py SingletonPattern/poly-singleton
@@ -517,12 +517,16 @@ def _entry_name(mapping: dict[str, str], profile: Profile) -> str | None:
 
 
 def _allowed_root_names(mapping: dict[str, str], profile: Profile) -> set[str]:
-    """版本根允许出现的文件/目录名（SPEC 展开后）。"""
+    """版本根允许出现的文件/目录名（SPEC 展开后）。
+
+    `required` 声明的是 **`src/` 下的相对路径**（4.2 统一挂 `src/` 下查），
+    其顶层名**不能**进版本根白名单 —— 否则 `v01/Main.java` 这种顶层散文件
+    会被 4.6 放行，「版本根只有 src/」被配置行静默打穿。
+    所以这里只收**字面目录项**（结尾是 `/` 的），文件项一个不放行。
+    """
     allowed: set[str] = set()
     for tmpl, _, _ in profile.spec:
         if tmpl.endswith("/"):
-            allowed.add(Path(_expand(tmpl, mapping)).name)
-        elif "/" not in tmpl:
             allowed.add(Path(_expand(tmpl, mapping)).name)
     return allowed
 
@@ -759,7 +763,9 @@ def _apply_config(profile: Profile, config: dict[str, str],
         entry = _entry_name(mapping, result)
         # `entry` 可写成 glob（如 `*.py`），那时没有单一入口名可查，跳过
         if entry and not any(c in entry for c in "*?["):
-            if entry not in _allowed_root_names(mapping, result):
+            # 判定看 spec 条目本身（4.2 挂 src/ 下查），不看 _allowed_root_names ——
+            # 那里现在只收目录项，拿它判入口会恒真，每区都刷一条误报。
+            if not any(Path(t).name == entry for t, req, _ in result.spec if req):
                 notes.append(
                     f"⚠ 区文档声明了 `required`，但清单里没有入口文件 `{entry}` —— "
                     f"`required` 一旦声明就只查列出的项，入口会失去「缺必需文件」的保护。把 `{entry}` 加进 `required`")

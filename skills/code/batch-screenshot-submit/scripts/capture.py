@@ -615,10 +615,10 @@ def pack_src_zip(src_root: Path, zip_path: Path, keep_root_name: str) -> None:
     """把 src/** 全打（含 img/、.wav）。只打 .java 的包运行不了。"""
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for p in sorted(src_root.rglob("*")):
-            if p.is_file():
-                zf.write(p, arcname=str(Path(keep_root_name) / p.relative_to(src_root)))
-        if not any(True for _ in src_root.rglob("*")):
+        files = [p for p in sorted(src_root.rglob("*")) if p.is_file()]
+        for p in files:
+            zf.write(p, arcname=str(Path(keep_root_name) / p.relative_to(src_root)))
+        if not files:                    # 只剩空目录也算空 src，别产出空 zip
             zf.writestr(f"{keep_root_name}/.keep", "")
 
 def run_check_code(repo_root: Path, area: Path, checks_script: Path | None,
@@ -661,7 +661,7 @@ def process_area(repo_root: Path, area: Path, out_root: Path,
 
     versions = find_versions(area)
     if not versions:
-        return [f"{_posix(area.relative_to(repo_root))} 下没有 vNN 版本目录"], [], None
+        return [f"{_rel(repo_root, area)} 下没有 vNN 版本目录"], [], None
 
     # 题号：转置项目必须声明（产物目录名靠它）；其余项目声明了也不生效，但要吭声。
     slot, doc, why = read_slot(area)
@@ -904,6 +904,9 @@ def main(argv: list[str] | None = None) -> int:
     if failed:
         print(f"× {failed}/{len(areas)} 个版本区失败 —— 未产出（或未更新）提交目录")
         print("  提交包要么完整要么没有：一个残缺的提交包比没有更糟。")
+        # 失败也清暂存：截图是中间产物，留着只会在下一轮被 rmtree 重建，纯属垃圾堆积。
+        for area in areas:
+            shutil.rmtree(out_root / f"stage-{area.parent.name}-{area.name}", ignore_errors=True)
         return 1
 
     # 转置项目的归位放在最后：同一项目的多个区必须**全部成功**才写，

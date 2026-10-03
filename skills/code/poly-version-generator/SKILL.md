@@ -70,7 +70,7 @@ poly-version-generator/scripts/audit_layout.py
 | 配置键 | 缺省 | 作用 |
 |---|---|---|
 | `entry` | 空（不锁具体入口名） | 入口文件模式，**换语言就改这里** |
-| `required` | 见 profile（`src/`） | 版本根必需项，**写了就只查列出的这些**。清单写法见下 |
+| `required` | 见 profile（`src/`） | `src/` 下的必需产物清单（相对 `src/` 的路径），**写了就只查列出的这些**。清单写法见下 |
 | `java_checks` | `on` | `on`/`off`：交付用词与「头部编译运行命令」检查 |
 | `code_checks` | `on` | `on`/`off`：编译与类路径卫生检查（由 `check_code.py` 执行）。`off` 时审计不再要求 `check_code.py` 全 PASS |
 
@@ -84,7 +84,7 @@ poly-version-generator/scripts/audit_layout.py
 - `entry` = `<Xxx>Experiment.java`
 ```
 
-## 三种用法
+## 用法
 
 ### 1. 建新版本区
 
@@ -102,7 +102,7 @@ poly-version-generator/scripts/audit_layout.py
    标记整段换掉，其余各节原样保留。
 4. 写完 `项目总结.md` 的其余三节（见下）。
 
-### 2. 只留一份文档：`项目总结.md`
+### 文档约定：只留一份 `项目总结.md`
 
 **整个版本区只有这一份 md，版本目录里一份不留。** 只留两节：
 

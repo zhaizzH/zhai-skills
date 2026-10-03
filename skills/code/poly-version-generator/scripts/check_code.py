@@ -42,7 +42,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import re
 import shutil
 import subprocess
@@ -156,7 +155,7 @@ def check_static(version_dir: Path) -> list[str]:
                 continue
             problems.append(
                 f"{_posix(rel)} 的 `import {imp};` 在本树内解析不到"
-                " —— 要么加源文件，要么它是外部 jar（那时把 jar 加进 libs.txt 并配 -cp）"
+                " —— 要么补源文件，要么把 jar 挂进编译命令的 -cp（外部 jar 不在本树检查范围内）"
             )
     return problems
 
@@ -211,7 +210,7 @@ def check_classpath_hygiene(version_dir: Path, out_root: Path) -> list[str]:
         inside = version_dir / name
         if inside.is_dir():
             problems.append(
-                f"版本目录里有 {{name}}/（= {name}/）—— 构建产物不属于版本产物；"
+                f"版本目录里有 {name}/ —— 构建产物不属于版本产物；"
                 "把它放到仓库根，且**每版一个独立 out 目录**（out/<版本名>）"
             )
     # 本版 out 是否被兄弟版本共享：同名 out 目录里出现不属于本版的类。
