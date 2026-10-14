@@ -10,7 +10,7 @@
   · 字体字形判定：缺 CJK 字形的字体会被识别出来，纯 ASCII 输出不受影响
   · 程序类型判定：Swing 源码判 GUI，纯控制台判非 GUI
   · 源根识别：有 `src/` 用 `src/`，旧布局退回版本根
-  · 题号读取：区文档里的 `slot` 行能读出来，缺行/空值/带路径分隔符都要报错
+  · 题号推导：按区名排序给 1 起的序号，与给区顺序无关，且不会重复
   · zip 打包：源码与二进制资源都在包里，且路径前缀是 `src/`
 
 退出码 0 = 全通过；1 = 有断言失败（脚本有问题，不是被检对象有问题）。
@@ -67,9 +67,9 @@ def main() -> int:
 
         # 参照字体：PIL 内置位图字体，确定不含 CJK 字形。
         bare = ImageFont.load_default()
-        assert C.missing_glyphs(bare, "宝马汽车下线"), \
+        assert C.missing_glyphs(bare, "中文样例文字"), \
             "内置位图字体没有中文字形，探针必须报出来"
-        assert C.missing_glyphs(bare, "BMW-3 x86_64") == set(), \
+        assert C.missing_glyphs(bare, "Sample-3 x86_64") == set(), \
             "纯 ASCII 不该被报成缺字形"
         # 空白与零宽字符天然没有字形，不该算缺失（否则整张图都会被判不可渲染）。
         assert C.missing_glyphs(bare, " \t\n") == set()
@@ -81,7 +81,7 @@ def main() -> int:
         assert C.missing_glyphs(font, "$ java Main\nhello 123") == set(), name
 
         # 含中文的输出：要么选出能画全的字体，要么明确报错（而不是静默出豆腐块）。
-        cjk = "$ java CarMain\n宝马汽车下线\n奔驰汽车下线"
+        cjk = "$ java DemoMain\n中文样例第一行\n中文样例第二行"
         font, name, problems = C.pick_console_font(cjk)
         if font is None:
             assert problems, "选不到字体时必须给出试过哪些、各自缺什么"
@@ -92,7 +92,7 @@ def main() -> int:
             # 注意这一步**不足以**发现乱码 —— 豆腐块图有内容、标准差约 28，
             # check_not_blank 照样放行。拦住乱码的是上面的 missing_glyphs 判据。
             out_png = d / "cjk.png"
-            assert C.render_console_png(cjk, "", "CarMain", out_png) == []
+            assert C.render_console_png(cjk, "", "DemoMain", out_png) == []
             assert C.check_not_blank(out_png) == [], "渲染出的图不该是空白"
 
         # 程序类型：含 swing/awt 的判 GUI，纯控制台的判非 GUI。
@@ -155,44 +155,26 @@ def main() -> int:
         names = set(zipfile.ZipFile(zp).namelist())
         assert names == {"src/a/Main.java", "src/img/h.png"}, names
 
-        # ── 题号读取 ──────────────────────────────────────────────────
-        # 题号是产物**目录名**，读错就把包放到错位置，而且外观完全正常。
-        area = d / "areadoc"
-        area.mkdir()
-
-        # 没区文档 → 必须报错，不能默认成 1（默认就把「没配」当成「第一题」）。
-        slot, doc, why = C.read_slot(area)
-        assert slot is None and why, "没有区文档时必须给出原因"
-
-        doc_path = area / "项目总结.md"
-        doc_path.write_text("# 标题\n\n正文\n", encoding="utf-8")
-        slot, doc, why = C.read_slot(area)
-        assert slot is None and "slot" in why, why
-
-        # 列表符号与引用块前缀都要认（配置行常写在 `>` 提示块里）。
-        doc_path.write_text("# 标题\n\n> - `slot` = `2`\n", encoding="utf-8")
-        assert C.read_slot(area)[0] == "2", C.read_slot(area)
-
-        doc_path.write_text("# 标题\n\n- `slot` = `3`\n", encoding="utf-8")
-        assert C.read_slot(area)[0] == "3"
-
-        # 行内夹在散文里的 `` `slot` = `1` `` 不算配置 —— 否则正文提一句就改掉落点。
-        doc_path.write_text("# 标题\n\n本区 `slot` = `1` 是题号。\n", encoding="utf-8")
-        assert C.read_slot(area)[0] is None, "非独立成行的 slot 不该被读成配置"
-
-        # 空值 = 没配，必须报错而不是当空目录名。
-        doc_path.write_text("# 标题\n\n- `slot` = ``\n", encoding="utf-8")
-        assert C.read_slot(area)[0] is None, "空题号必须报错"
-
-        # 带路径分隔符的值会把产物写到提交树外面，必须拦。
-        doc_path.write_text("# 标题\n\n- `slot` = `../坏`\n", encoding="utf-8")
-        assert C.read_slot(area)[0] is None, "含路径分隔符的题号必须拦下"
-        doc_path.write_text("# 标题\n\n- `slot` = `a/b`\n", encoding="utf-8")
-        assert C.read_slot(area)[0] is None, "含 / 的题号必须拦下"
-
-        # 转置范围：只对登记过的项目开启。
-        assert C.is_transposed("04-FactoryPattern")
-        assert not C.is_transposed("02-SingletonPattern")
+        # ── 题号推导 ──────────────────────────────────────────────────
+        # 题号是产物**目录名**：推错就把包放到错位置（或两区互相覆盖），
+        # 而外观完全正常。这里的判据是「按区名排序 + 从 1 起 + 唯一」。
+        names = ["poly-bravo", "poly-alpha", "poly-charlie"]
+        # 与给区顺序无关（命令行 `--area` 的顺序不该改变产物落点）。
+        assert C.topic_no(names, "poly-alpha") == "1", C.topic_no(names, "poly-alpha")
+        assert C.topic_no(names, "poly-bravo") == "2"
+        assert C.topic_no(names, "poly-charlie") == "3"
+        # 单区项目：题号恒为 1（统一布局下多一层 `1/`，不是缺陷）。
+        assert C.topic_no(["poly-only"], "poly-only") == "1"
+        # 不重不漏：每个区拿到唯一题号，且都落在 1..N。
+        got = {C.topic_no(names, n) for n in names}
+        assert got == {"1", "2", "3"}, got
+        # 混入未列出的区 = 脚本 bug，必须炸而不是回落到错编号。
+        try:
+            C.topic_no(names, "poly-delta")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("未列出的区应抛 ValueError，而不是拿到一个错编号")
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
